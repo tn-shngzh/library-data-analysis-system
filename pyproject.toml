@@ -1,6 +1,6 @@
 [project]
-name = "library-analytics"
-version = "0.1.0"
+name = "library-data-analysis"
+version = "0.2.0"
 description = "Library user borrowing behavior analysis system based on PostgreSQL and DuckDB"
 authors = [
     {name = "tianshengzhe"}
@@ -8,8 +8,13 @@ authors = [
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi",
+    "uvicorn",
+    "psycopg2-binary",
+    "pyjwt",
+    "passlib",
+    "python-dotenv"
 ]
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
