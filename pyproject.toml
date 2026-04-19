@@ -1,7 +1,7 @@
 [project]
 name = "library-data-analysis"
-version = "0.3.0"
-description = "Library user borrowing behavior analysis system with JWT authentication"
+version = "0.4.0"
+description = "Library data analysis system with JWT authentication and captcha verification"
 authors = [
     {name = "tianshengzhe"}
 ]
@@ -13,7 +13,8 @@ dependencies = [
     "psycopg2-binary",
     "pyjwt",
     "passlib",
-    "python-dotenv"
+    "python-dotenv",
+    "pillow"
 ]
 
 [build-system]
