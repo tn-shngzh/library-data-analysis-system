@@ -1,7 +1,7 @@
 [project]
 name = "library-data-analysis"
-version = "0.2.0"
-description = "Library user borrowing behavior analysis system based on PostgreSQL and DuckDB"
+version = "0.3.0"
+description = "Library user borrowing behavior analysis system with JWT authentication"
 authors = [
     {name = "tianshengzhe"}
 ]
