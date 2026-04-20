@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Form, HTTPException
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import psycopg2
 import os
 from datetime import datetime, timedelta
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 import base64
 import io
 import uuid
@@ -13,8 +13,22 @@ import random
 import string
 from PIL import Image, ImageDraw, ImageFont
 
-# 密码加密
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import re
+import bcrypt
+
+# 密码加密辅助函数
+def hash_password(password: str) -> str:
+    """使用 bcrypt 加密密码"""
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    """验证密码"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 app = FastAPI(title="图书馆数据分析系统")
 
@@ -29,6 +43,30 @@ app.add_middleware(
 
 # 验证码存储（内存缓存，生产环境应使用 Redis）
 captcha_store = {}
+
+
+def validate_username(username: str) -> tuple:
+    """验证用户名格式"""
+    if not username or len(username.strip()) == 0:
+        return False, "用户名不能为空"
+    if len(username) < 3:
+        return False, "用户名长度不能少于3个字符"
+    if len(username) > 20:
+        return False, "用户名长度不能超过20个字符"
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "用户名只能包含字母、数字和下划线"
+    return True, ""
+
+
+def validate_password(password: str) -> tuple:
+    """验证密码格式"""
+    if not password or len(password.strip()) == 0:
+        return False, "密码不能为空"
+    if len(password) < 6:
+        return False, "密码长度不能少于6个字符"
+    if len(password) > 50:
+        return False, "密码长度不能超过50个字符"
+    return True, ""
 
 
 def generate_captcha_image(text: str) -> str:
@@ -135,6 +173,56 @@ async def root():
     return {"message": "图书馆数据分析系统 API"}
 
 
+@app.post("/api/register")
+async def register(username: str = Form(...), password: str = Form(...)):
+    """用户注册接口"""
+    # 验证用户名格式
+    is_valid, error_msg = validate_username(username)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # 验证密码格式
+    is_valid, error_msg = validate_password(password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # 检查用户名是否已存在
+            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="该用户名已被注册，请选择其他用户名")
+            
+            # 获取当前最大 ID 并计算新 ID
+            cur.execute("SELECT MAX(id) FROM users")
+            max_id = cur.fetchone()[0]
+            new_id = (max_id + 1) if max_id else 1
+            
+            # 加密密码
+            password_hash = hash_password(password)
+            
+            # 插入新用户
+            cur.execute(
+                "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (%s, %s, %s, %s, %s)",
+                (new_id, username, password_hash, 'user', datetime.utcnow())
+            )
+            conn.commit()
+            
+            return {
+                "message": "注册成功",
+                "user_id": new_id,
+                "username": username
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"注册失败，请稍后重试: {str(e)}")
+    finally:
+        conn.close()
+
+
 @app.post("/api/login")
 async def login(username: str = Form(...), password: str = Form(...), captcha: str = Form(...), captcha_key: str = Form(...)):
     """登录接口"""
@@ -172,19 +260,12 @@ async def login(username: str = Form(...), password: str = Form(...), captcha: s
 
             user_id, db_username, password_hash, role = user
 
-            # 验证密码（开发环境简化版）
-            # 检查是否是 bcrypt 哈希
-            if password_hash.startswith('$2'):
-                if not pwd_context.verify(password, password_hash):
-                    raise HTTPException(status_code=401, detail="用户名或密码错误")
-            else:
-                # 明文密码对比（仅开发测试用）
-                if password != password_hash:
-                    raise HTTPException(status_code=401, detail="用户名或密码错误")
+            # 验证密码
+            if not verify_password(password, password_hash):
+                raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-            # 检查权限（只有 admin 可以登录系统）
-            if role != "admin":
-                raise HTTPException(status_code=403, detail="权限不足，仅管理员可登录")
+            # 根据角色返回不同的系统标识
+            system = "library" if role != "admin" else "analysis"
 
             # 创建 token
             access_token = create_access_token(
@@ -195,7 +276,8 @@ async def login(username: str = Form(...), password: str = Form(...), captcha: s
                 "access_token": access_token,
                 "token_type": "bearer",
                 "username": db_username,
-                "role": role
+                "role": role,
+                "system": system
             }
     finally:
         conn.close()
@@ -460,17 +542,17 @@ async def get_hot_books():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT bib_id, COUNT(*) as borrow_count
-                FROM circulations
-                WHERE action = 'CKO'
-                GROUP BY bib_id
+                SELECT bc.bib_id, bc.category, COUNT(c.id) as borrow_count
+                FROM book_categories bc
+                JOIN circulations c ON bc.bib_id = c.bib_id AND c.action = 'CKO'
+                GROUP BY bc.bib_id, bc.category
                 ORDER BY borrow_count DESC
-                LIMIT 10
+                LIMIT 20
             """)
             rows = cur.fetchall()
             return [
-                {"rank": i + 1, "item_id": r[0], "borrowed": r[1]}
-                for i, r in enumerate(rows)
+                {"id": r[0], "title": r[1], "category": r[1], "borrow_count": r[2]}
+                for r in rows
             ]
     finally:
         conn.close()
@@ -482,16 +564,19 @@ async def get_borrow_stats():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM mv_borrow_stats")
-            row = cur.fetchone()
-            
+            cur.execute("SELECT COUNT(*) FROM book_categories")
+            total_books = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(DISTINCT c.bib_id) FROM circulations c JOIN book_categories bc ON c.bib_id = bc.bib_id WHERE c.action = 'CKO'")
+            cko_count = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKO'")
+            total_borrows = cur.fetchone()[0]
+
             return {
-                "total_actions": row[0],
-                "total_borrows": row[1],
-                "total_returns": row[2],
-                "total_renewals": row[3],
-                "active_borrowers": row[4],
-                "borrowed_books": row[5]
+                "total_books": total_books,
+                "cko_count": cko_count,
+                "total_borrows": total_borrows
             }
     finally:
         conn.close()
@@ -626,6 +711,160 @@ async def get_recent_borrows():
                     "action": r[4],
                     "degree": education_levels.get(r[5], r[5]),
                     "category": r[6] if r[6] else '未知'
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+@app.get("/api/books/search")
+async def search_books(q: str):
+    """搜索图书"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            search_term = f"%{q}%"
+            cur.execute("""
+                SELECT DISTINCT bc.bib_id, bc.title, bc.category, COUNT(c.id) as borrow_count
+                FROM book_categories bc
+                LEFT JOIN circulations c ON bc.bib_id = c.bib_id AND c.action = 'CKO'
+                WHERE bc.category ILIKE %s OR bc.title ILIKE %s
+                GROUP BY bc.bib_id, bc.title, bc.category
+                ORDER BY borrow_count DESC
+                LIMIT 50
+            """, (search_term, search_term))
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "title": r[1],
+                    "category": r[2],
+                    "borrow_count": r[3]
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+def get_current_user(request: Request) -> str:
+    """从请求头获取当前用户"""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未提供认证信息")
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="无效的 token")
+        return username
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="无效的 token")
+
+
+@app.post("/api/borrows/borrow")
+async def borrow_book(request: Request):
+    """借阅图书"""
+    username = get_current_user(request)
+    body = await request.json()
+    book_id = body.get("book_id")
+    if not book_id:
+        raise HTTPException(status_code=400, detail="缺少图书 ID")
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="读者不存在")
+            
+            borrower_id = borrower[0]
+            action_date = datetime.now().date()
+            action_time = datetime.now().time()
+            
+            cur.execute("""
+                INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
+                VALUES (%s, %s, 'CKO', %s, %s)
+                RETURNING id
+            """, (book_id, borrower_id, action_date, action_time))
+            
+            circ_id = cur.fetchone()[0]
+            conn.commit()
+            
+            return {"success": True, "circulation_id": circ_id}
+    finally:
+        conn.close()
+
+
+@app.post("/api/borrows/return")
+async def return_book(request: Request):
+    """归还图书"""
+    username = get_current_user(request)
+    body = await request.json()
+    book_id = body.get("book_id")
+    if not book_id:
+        raise HTTPException(status_code=400, detail="缺少图书 ID")
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="读者不存在")
+            
+            borrower_id = borrower[0]
+            action_date = datetime.now().date()
+            action_time = datetime.now().time()
+            
+            cur.execute("""
+                INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
+                VALUES (%s, %s, 'REH', %s, %s)
+                RETURNING id
+            """, (book_id, borrower_id, action_date, action_time))
+            
+            circ_id = cur.fetchone()[0]
+            conn.commit()
+            
+            return {"success": True, "circulation_id": circ_id}
+    finally:
+        conn.close()
+
+
+@app.get("/api/borrows/my")
+async def get_my_borrows(request: Request):
+    """获取当前用户的借阅记录"""
+    username = get_current_user(request)
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                return []
+            
+            borrower_id = borrower[0]
+            cur.execute("""
+                SELECT c.bib_id, bc.category, c.action, c.action_date, c.action_time
+                FROM circulations c
+                LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
+                WHERE c.borrower_id = %s
+                ORDER BY c.action_date DESC, c.action_time DESC
+                LIMIT 50
+            """, (borrower_id,))
+            rows = cur.fetchall()
+            return [
+                {
+                    "bib_id": r[0],
+                    "title": r[1] if r[1] else '未知',
+                    "category": r[1] if r[1] else '未知',
+                    "action": r[2],
+                    "action_name": '借出' if r[2] == 'CKO' else '归还' if r[2] == 'REH' else r[2],
+                    "date": str(r[3]),
+                    "time": str(r[4]) if r[4] else ''
                 }
                 for r in rows
             ]

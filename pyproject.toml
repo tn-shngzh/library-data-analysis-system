@@ -1,7 +1,7 @@
 [project]
 name = "library-data-analysis"
-version = "0.6.0"
-description = "Library data analysis system with JWT authentication and captcha verification"
+version = "0.7.0"
+description = "Library data analysis system with JWT authentication, captcha verification and user registration"
 authors = [
     {name = "tianshengzhe"}
 ]
@@ -12,9 +12,10 @@ dependencies = [
     "uvicorn",
     "psycopg2-binary",
     "pyjwt",
-    "passlib",
     "python-dotenv",
-    "pillow"
+    "pillow",
+    "bcrypt (>=5.0.0,<6.0.0)",
+    "python-multipart"
 ]
 
 [build-system]

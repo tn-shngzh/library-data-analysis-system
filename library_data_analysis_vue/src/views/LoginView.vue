@@ -67,7 +67,12 @@ const handleLogin = async () => {
         localStorage.setItem('remember_username', username.value)
       }
       
-      router.push('/dashboard')
+      // 根据角色跳转到不同系统
+      if (data.system === 'library') {
+        router.push('/library')
+      } else {
+        router.push('/dashboard')
+      }
     } else {
       const errData = await response.json()
       error.value = errData.detail || '登录失败'
@@ -92,19 +97,19 @@ const handleLogin = async () => {
         <div class="brand">
           <img class="logo-icon" :src="bookIcon" alt="logo" />
           <div class="brand-text">
-            <div class="brand-title">图书馆数据分析系统</div>
-            <div class="brand-subtitle">Library Data Analysis System</div>
-          </div>
+          <div class="brand-title">图书馆管理系统</div>
+          <div class="brand-subtitle">Library Management System</div>
+        </div>
         </div>
 
         <!-- 主标题 -->
         <div class="hero">
           <h1>
-            数据驱动 · <span class="highlight">智慧图书馆</span>
+            智慧图书馆 · <span class="highlight">一站式服务</span>
           </h1>
           <p class="hero-desc">
-            通过数据分析洞察读者行为，优化资源配置，<br>
-            提升服务质量，打造智慧化图书馆管理新体验。
+            普通用户：在线借阅、查询图书、管理个人账户<br>
+            管理员：数据分析、运营管理、决策支持
           </p>
         </div>
 
@@ -113,36 +118,12 @@ const handleLogin = async () => {
           <div class="feature-item">
             <div class="feature-icon">
               <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
-              </svg>
-            </div>
-            <div class="feature-info">
-              <div class="feature-name">数据分析</div>
-              <div class="feature-desc">多维度数据统计分析</div>
-            </div>
-          </div>
-
-          <div class="feature-item">
-            <div class="feature-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/>
-              </svg>
-            </div>
-            <div class="feature-info">
-              <div class="feature-name">可视化报表</div>
-              <div class="feature-desc">直观展示分析结果</div>
-            </div>
-          </div>
-
-          <div class="feature-item">
-            <div class="feature-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">用户管理</div>
-              <div class="feature-desc">读者行为洞察分析</div>
+              <div class="feature-name">用户服务</div>
+              <div class="feature-desc">在线借阅查询管理</div>
             </div>
           </div>
 
@@ -153,8 +134,20 @@ const handleLogin = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">资源管理</div>
-              <div class="feature-desc">图书资源智能管理</div>
+              <div class="feature-name">图书资源</div>
+              <div class="feature-desc">海量图书在线借阅</div>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+              </svg>
+            </div>
+            <div class="feature-info">
+              <div class="feature-name">数据分析</div>
+              <div class="feature-desc">管理决策支持</div>
             </div>
           </div>
         </div>
@@ -162,8 +155,8 @@ const handleLogin = async () => {
 
       <!-- 版权信息 -->
       <div class="copyright">
-        © 2024 图书馆数据分析系统·让数据创造价值
-      </div>
+          © 2024 图书馆管理系统·让服务更智慧
+        </div>
     </div>
 
     <!-- 右侧登录区域 -->
@@ -171,7 +164,7 @@ const handleLogin = async () => {
       <div class="login-card">
         <div class="login-header">
           <h2>欢迎登录</h2>
-          <p>图书馆数据分析系统</p>
+          <p>图书馆管理系统 - 根据您的角色自动进入相应系统</p>
         </div>
 
         <!-- 错误提示 -->
@@ -247,8 +240,34 @@ const handleLogin = async () => {
           <button type="submit" class="submit-btn" :disabled="loading">
             {{ loading ? '登录中...' : '登录' }}
           </button>
+
+          <div class="form-footer">
+            <span>还没有账户？</span>
+            <router-link to="/register" class="link-btn">立即注册</router-link>
+          </div>
         </form>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.form-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.link-btn {
+  color: #6366f1;
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+
+.link-btn:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+</style>

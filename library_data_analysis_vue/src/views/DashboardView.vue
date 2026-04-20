@@ -199,7 +199,7 @@ const logout = () => {
         </nav>
         
         <div class="sidebar-footer">
-          <div class="version-badge">v0.6.0</div>
+          <div class="version-badge">v0.7.0</div>
         </div>
       </aside>
       
