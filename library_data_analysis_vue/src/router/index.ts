@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
+import OverviewView from '../views/OverviewView.vue'
+import ReaderView from '../views/ReaderView.vue'
+import BookView from '../views/BookView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -15,9 +18,26 @@ const router = createRouter({
       component: LoginView
     },
     {
-      path: '/dashboard',
-      name: 'dashboard',
-      component: DashboardView
+      path: '/',
+      component: DashboardView,
+      redirect: '/dashboard',
+      children: [
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: OverviewView
+        },
+        {
+          path: 'readers',
+          name: 'readers',
+          component: ReaderView
+        },
+        {
+          path: 'books',
+          name: 'books',
+          component: BookView
+        }
+      ]
     }
   ]
 })

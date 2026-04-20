@@ -1,6 +1,6 @@
 [project]
 name = "library-data-analysis"
-version = "0.4.0"
+version = "0.6.0"
 description = "Library data analysis system with JWT authentication and captcha verification"
 authors = [
     {name = "tianshengzhe"}
