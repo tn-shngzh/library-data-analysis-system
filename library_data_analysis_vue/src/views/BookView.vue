@@ -19,6 +19,17 @@ const categories = ref([])
 const hotBooks = ref([])
 const loading = ref(true)
 
+const searchKeyword = ref('')
+const searchCategory = ref('')
+const categoriesList = ref([])
+const searchResults = ref([])
+const searchTotal = ref(0)
+const searchPage = ref(1)
+const searchPageSize = ref(20)
+const searchTotalPages = ref(0)
+const searchLoading = ref(false)
+const hasSearched = ref(false)
+
 const fetchBookData = async () => {
   loading.value = true
   try {
@@ -30,11 +41,66 @@ const fetchBookData = async () => {
 
     if (statsRes.ok) bookStats.value = await statsRes.json()
     if (catRes.ok) categories.value = await catRes.json()
-    if (hotRes.ok) hotBooks.value = await hotRes.json()
+    if (hotRes.ok) {
+      const hotData = await hotRes.json()
+      console.log('热门图书数据:', hotData)
+      hotBooks.value = hotData
+    }
   } catch (e) {
     console.error('获取数据失败', e)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchCategoriesList = async () => {
+  try {
+    const res = await fetch('/api/books/categories-list')
+    if (res.ok) categoriesList.value = await res.json()
+  } catch (e) {
+    console.error('获取分类列表失败', e)
+  }
+}
+
+const performSearch = async (page = 1) => {
+  searchLoading.value = true
+  hasSearched.value = true
+  searchPage.value = page
+  try {
+    const params = new URLSearchParams({
+      keyword: searchKeyword.value,
+      category: searchCategory.value,
+      page: page,
+      page_size: searchPageSize.value
+    })
+    const res = await fetch(`/api/books/search?${params}`)
+    if (res.ok) {
+      const data = await res.json()
+      console.log('检索结果:', data)
+      searchResults.value = data.books
+      searchTotal.value = data.total
+      searchTotalPages.value = data.total_pages
+    }
+  } catch (e) {
+    console.error('检索失败', e)
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+const resetSearch = () => {
+  searchKeyword.value = ''
+  searchCategory.value = ''
+  searchResults.value = []
+  searchTotal.value = 0
+  searchPage.value = 1
+  searchTotalPages.value = 0
+  hasSearched.value = false
+}
+
+const goToPage = (page) => {
+  if (page >= 1 && page <= searchTotalPages.value) {
+    performSearch(page)
   }
 }
 
@@ -51,6 +117,7 @@ onMounted(() => {
   if (!props.preloadedData || !props.preloadedData.stats) {
     fetchBookData()
   }
+  fetchCategoriesList()
 })
 
 const formatNumber = (num) => num.toLocaleString()
@@ -183,27 +250,128 @@ const formatNumber = (num) => num.toLocaleString()
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
             </span>
-            热门图书 TOP 10
+            热门图书 TOP 20
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
               <th>排名</th>
-              <th>图书ID</th>
+              <th>图书名称</th>
+              <th>分类</th>
               <th>借阅次数</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(book, index) in hotBooks" :key="book.item_id" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
+            <tr v-for="(book, index) in hotBooks" :key="book.bib_id" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
               <td>
                 <span class="rank-badge" :class="'rank-' + book.rank">{{ book.rank }}</span>
               </td>
-              <td class="id-cell">图书 #{{ book.item_id }}</td>
-              <td class="count-cell">{{ formatNumber(book.borrowed) }} <span class="unit">次</span></td>
+              <td class="name-cell">{{ book.name }}</td>
+              <td><span class="category-tag">{{ book.category }}</span></td>
+              <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">次</span></td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">
+            <span class="title-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </span>
+            图书检索
+          </h3>
+        </div>
+
+        <div class="search-form">
+          <div class="search-inputs">
+            <div class="input-group">
+              <label>关键词</label>
+              <input 
+                v-model="searchKeyword" 
+                type="text" 
+                placeholder="输入图书名称或关键词"
+                @keyup.enter="performSearch(1)"
+              />
+            </div>
+            <div class="input-group">
+              <label>分类</label>
+              <select v-model="searchCategory">
+                <option value="">全部分类</option>
+                <option v-for="cat in categoriesList" :key="cat" :value="cat">{{ cat }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="search-actions">
+            <button class="search-btn" @click="performSearch(1)" :disabled="searchLoading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <span>{{ searchLoading ? '检索中...' : '检索' }}</span>
+            </button>
+            <button class="reset-btn" @click="resetSearch">重置</button>
+          </div>
+        </div>
+
+        <div v-if="hasSearched" class="search-results">
+          <div class="results-header">
+            <span class="results-count">共找到 {{ searchTotal }} 条结果</span>
+          </div>
+
+          <div v-if="searchResults.length === 0" class="no-results">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              <line x1="8" y1="8" x2="14" y2="14"/>
+              <line x1="14" y1="8" x2="8" y2="14"/>
+            </svg>
+            <p>未找到匹配的图书</p>
+            <span>请尝试其他关键词或分类</span>
+          </div>
+
+          <table v-else class="data-table">
+            <thead>
+              <tr>
+                <th>图书 ID</th>
+                <th>图书名称</th>
+                <th>分类</th>
+                <th>借阅次数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(book, index) in searchResults" :key="book.bib_id" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
+                <td class="id-cell">#{{ book.bib_id }}</td>
+                <td class="name-cell">{{ book.name }}</td>
+                <td><span class="category-tag">{{ book.category }}</span></td>
+                <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">次</span></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div v-if="searchTotalPages > 1" class="pagination">
+            <button 
+              class="page-btn" 
+              :disabled="searchPage === 1" 
+              @click="goToPage(searchPage - 1)"
+            >
+              上一页
+            </button>
+            <span class="page-info">第 {{ searchPage }} / {{ searchTotalPages }} 页</span>
+            <button 
+              class="page-btn" 
+              :disabled="searchPage === searchTotalPages" 
+              @click="goToPage(searchPage + 1)"
+            >
+              下一页
+            </button>
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -486,9 +654,14 @@ const formatNumber = (num) => num.toLocaleString()
   color: #64748b;
 }
 
-.id-cell {
+.name-cell {
   font-weight: 600;
   color: #0f172a;
+}
+
+.id-cell {
+  font-weight: 600;
+  color: #6366f1;
 }
 
 .percent-bar {
@@ -542,5 +715,188 @@ const formatNumber = (num) => num.toLocaleString()
 .rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10 {
   background: #f1f5f9;
   color: #64748b;
+}
+
+.search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.search-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.input-group input,
+.input-group select {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.input-group input::placeholder {
+  color: #94a3b8;
+}
+
+.search-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.search-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.search-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.search-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.reset-btn {
+  padding: 10px 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.search-results {
+  margin-top: 16px;
+}
+
+.results-header {
+  margin-bottom: 16px;
+}
+
+.results-count {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+}
+
+.no-results svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-results p {
+  font-size: 16px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 8px 0;
+}
+
+.no-results span {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.page-btn {
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
 }
 </style>

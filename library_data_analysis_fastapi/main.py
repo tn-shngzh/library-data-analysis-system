@@ -542,18 +542,118 @@ async def get_hot_books():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT bc.bib_id, bc.category, COUNT(c.id) as borrow_count
+                SELECT bc.bib_id, bc.name, bc.category, COUNT(c.id) as borrow_count
                 FROM book_categories bc
                 JOIN circulations c ON bc.bib_id = c.bib_id AND c.action = 'CKO'
-                GROUP BY bc.bib_id, bc.category
+                GROUP BY bc.bib_id, bc.name, bc.category
                 ORDER BY borrow_count DESC
                 LIMIT 20
             """)
             rows = cur.fetchall()
             return [
-                {"id": r[0], "title": r[1], "category": r[1], "borrow_count": r[2]}
+                {
+                    "rank": i + 1,
+                    "bib_id": r[0],
+                    "name": r[1],
+                    "category": r[2],
+                    "borrow_count": r[3]
+                }
+                for i, r in enumerate(rows)
+            ]
+    finally:
+        conn.close()
+
+
+@app.get("/api/books/search")
+async def search_books(
+    keyword: str = "",
+    category: str = "",
+    page: int = 1,
+    page_size: int = 20
+):
+    """图书检索功能，支持按名称、分类、关键词搜索"""
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 100:
+        page_size = 20
+    
+    offset = (page - 1) * page_size
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            conditions = []
+            params = []
+            
+            if keyword:
+                conditions.append("(bc.name ILIKE %s OR bc.category ILIKE %s)")
+                params.extend([f"%{keyword}%", f"%{keyword}%"])
+            
+            if category:
+                conditions.append("bc.category = %s")
+                params.append(category)
+            
+            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            # 获取总数
+            count_sql = f"SELECT COUNT(*) FROM book_categories bc{where_clause}"
+            cur.execute(count_sql, params)
+            total = cur.fetchone()[0]
+            
+            # 获取分页数据
+            data_sql = f"""
+                SELECT bc.bib_id, bc.name, bc.category, 
+                       COALESCE(borrow_counts.borrow_count, 0) as borrow_count
+                FROM book_categories bc
+                LEFT JOIN (
+                    SELECT bib_id, COUNT(*) as borrow_count
+                    FROM circulations
+                    WHERE action = 'CKO'
+                    GROUP BY bib_id
+                ) borrow_counts ON bc.bib_id = borrow_counts.bib_id
+                {where_clause}
+                ORDER BY borrow_count DESC, bc.bib_id ASC
+                LIMIT %s OFFSET %s
+            """
+            cur.execute(data_sql, params + [page_size, offset])
+            rows = cur.fetchall()
+            
+            books = [
+                {
+                    "bib_id": r[0],
+                    "name": r[1],
+                    "category": r[2],
+                    "borrow_count": r[3]
+                }
                 for r in rows
             ]
+            
+            total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+            
+            return {
+                "books": books,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+    finally:
+        conn.close()
+
+
+@app.get("/api/books/categories-list")
+async def get_categories_list():
+    """获取所有图书分类列表"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT category
+                FROM book_categories
+                ORDER BY category
+            """)
+            rows = cur.fetchall()
+            return [r[0] for r in rows]
     finally:
         conn.close()
 
@@ -693,7 +793,7 @@ async def get_recent_borrows():
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT c.action_date, c.action_time, c.borrower_id, c.bib_id, 
-                       c.action, b.degree, bc.category
+                       c.action, b.degree, bc.category, bc.name
                 FROM circulations c
                 JOIN borrowers b ON c.borrower_id = b.id
                 LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
@@ -710,37 +810,8 @@ async def get_recent_borrows():
                     "bib_id": r[3],
                     "action": r[4],
                     "degree": education_levels.get(r[5], r[5]),
-                    "category": r[6] if r[6] else '未知'
-                }
-                for r in rows
-            ]
-    finally:
-        conn.close()
-
-
-@app.get("/api/books/search")
-async def search_books(q: str):
-    """搜索图书"""
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            search_term = f"%{q}%"
-            cur.execute("""
-                SELECT DISTINCT bc.bib_id, bc.title, bc.category, COUNT(c.id) as borrow_count
-                FROM book_categories bc
-                LEFT JOIN circulations c ON bc.bib_id = c.bib_id AND c.action = 'CKO'
-                WHERE bc.category ILIKE %s OR bc.title ILIKE %s
-                GROUP BY bc.bib_id, bc.title, bc.category
-                ORDER BY borrow_count DESC
-                LIMIT 50
-            """, (search_term, search_term))
-            rows = cur.fetchall()
-            return [
-                {
-                    "id": r[0],
-                    "title": r[1],
-                    "category": r[2],
-                    "borrow_count": r[3]
+                    "category": r[6] if r[6] else '未知',
+                    "title": r[7] if r[7] else '未知'
                 }
                 for r in rows
             ]
@@ -776,7 +847,7 @@ async def borrow_book(request: Request):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:
                 raise HTTPException(status_code=404, detail="读者不存在")
@@ -811,7 +882,7 @@ async def return_book(request: Request):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:
                 raise HTTPException(status_code=404, detail="读者不存在")
@@ -841,14 +912,14 @@ async def get_my_borrows(request: Request):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM borrowers WHERE username = %s", (username,))
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:
                 return []
             
             borrower_id = borrower[0]
             cur.execute("""
-                SELECT c.bib_id, bc.category, c.action, c.action_date, c.action_time
+                SELECT c.bib_id, bc.name, bc.category, c.action, c.action_date, c.action_time
                 FROM circulations c
                 LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
                 WHERE c.borrower_id = %s
@@ -860,11 +931,11 @@ async def get_my_borrows(request: Request):
                 {
                     "bib_id": r[0],
                     "title": r[1] if r[1] else '未知',
-                    "category": r[1] if r[1] else '未知',
-                    "action": r[2],
-                    "action_name": '借出' if r[2] == 'CKO' else '归还' if r[2] == 'REH' else r[2],
-                    "date": str(r[3]),
-                    "time": str(r[4]) if r[4] else ''
+                    "category": r[2] if r[2] else '未知',
+                    "action": r[3],
+                    "action_name": '借出' if r[3] == 'CKO' else '归还' if r[3] == 'REH' else r[3],
+                    "date": str(r[4]),
+                    "time": str(r[5]) if r[5] else ''
                 }
                 for r in rows
             ]

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -12,6 +12,9 @@ const activeTab = ref('home')
 const searchQuery = ref('')
 const searchResults = ref([])
 const isSearching = ref(false)
+
+const showDropdown = ref(false)
+const userMenuRef = ref(null)
 
 const libraryData = reactive({
   stats: null,
@@ -27,6 +30,78 @@ const tabs = [
   { id: 'hot', label: '热门图书', icon: 'fire' },
   { id: 'mybooks', label: '我的借阅', icon: 'books' }
 ]
+
+const toggleDropdown = () => {
+  showDropdown.value = !showDropdown.value
+}
+
+const closeDropdown = (event) => {
+  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
+    showDropdown.value = false
+  }
+}
+
+const goToSettings = () => {
+  showDropdown.value = false
+  router.push('/settings')
+}
+
+const goToMyBooks = () => {
+  showDropdown.value = false
+  activeTab.value = 'mybooks'
+}
+
+const goToHotBooks = () => {
+  showDropdown.value = false
+  activeTab.value = 'hot'
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeDropdown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeDropdown)
+})
+
+// 防抖函数
+const debounce = (fn, delay) => {
+  let timer = null
+  return function(...args) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+    }, delay)
+  }
+}
+
+// 实时搜索函数
+const performRealTimeSearch = async () => {
+  if (!searchQuery.value.trim()) {
+    searchResults.value = []
+    return
+  }
+  
+  try {
+    const response = await fetch(`/api/books/search?keyword=${encodeURIComponent(searchQuery.value)}&page=1&page_size=20`)
+    if (response.ok) {
+      const data = await response.json()
+      searchResults.value = data.books || []
+    }
+  } catch (e) {
+    console.error('搜索失败', e)
+  }
+}
+
+// 创建防抖的搜索函数（500ms 延迟）
+const debouncedSearch = debounce(performRealTimeSearch, 500)
+
+// 监听搜索框输入
+watch(searchQuery, () => {
+  if (activeTab.value === 'search') {
+    debouncedSearch()
+  }
+})
 
 const updateTime = () => {
   const now = new Date()
@@ -72,13 +147,18 @@ const loadMyBorrows = async () => {
 }
 
 const handleSearch = async () => {
-  if (!searchQuery.value.trim()) return
+  // 手动点击搜索按钮时，立即执行搜索，不使用防抖
+  if (!searchQuery.value.trim()) {
+    searchResults.value = []
+    return
+  }
   
   isSearching.value = true
   try {
-    const response = await fetch(`/api/books/search?q=${encodeURIComponent(searchQuery.value)}`)
+    const response = await fetch(`/api/books/search?keyword=${encodeURIComponent(searchQuery.value)}&page=1&page_size=50`)
     if (response.ok) {
-      searchResults.value = await response.json()
+      const data = await response.json()
+      searchResults.value = data.books || []
     }
   } catch (e) {
     console.error('搜索失败', e)
@@ -165,14 +245,70 @@ onMounted(async () => {
         <div class="datetime">
           <span class="date">{{ currentTime }}</span>
         </div>
-        <div class="user-menu">
-          <div class="avatar">
+        <div class="user-menu" ref="userMenuRef">
+          <div class="avatar" @click="toggleDropdown">
             <span class="avatar-text">{{ username.charAt(0).toUpperCase() }}</span>
           </div>
-          <div class="user-details">
+          <div class="user-details" @click="toggleDropdown">
             <span class="user-name">{{ username }}</span>
             <span class="user-role-badge user">用户</span>
           </div>
+          
+          <!-- 下拉菜单 -->
+          <transition name="dropdown">
+            <div v-if="showDropdown" class="dropdown-menu">
+              <div class="dropdown-header">
+                <div class="dropdown-avatar">
+                  <span>{{ username.charAt(0).toUpperCase() }}</span>
+                </div>
+                <div class="dropdown-user-info">
+                  <div class="dropdown-username">{{ username }}</div>
+                  <div class="dropdown-role">普通用户</div>
+                </div>
+              </div>
+              
+              <div class="dropdown-divider"></div>
+              
+              <div class="dropdown-body">
+                <div class="dropdown-item" @click="goToSettings">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                  </svg>
+                  <span>用户设置</span>
+                </div>
+                
+                <div class="dropdown-item" @click="goToMyBooks">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  </svg>
+                  <span>我的借阅</span>
+                </div>
+                
+                <div class="dropdown-item" @click="goToHotBooks">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                    <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/>
+                  </svg>
+                  <span>热门图书</span>
+                </div>
+              </div>
+              
+              <div class="dropdown-divider"></div>
+              
+              <div class="dropdown-footer">
+                <div class="dropdown-item logout-item" @click="logout">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  <span>退出登录</span>
+                </div>
+              </div>
+            </div>
+          </transition>
+          
           <button @click="logout" class="logout-btn" title="退出登录">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -294,16 +430,16 @@ onMounted(async () => {
                   热门图书
                 </h3>
                 <div class="hot-books-list">
-                  <div v-for="(book, index) in libraryData.hotBooks?.slice(0, 5)" :key="book.id" class="hot-book-item">
+                  <div v-for="(book, index) in libraryData.hotBooks?.slice(0, 5)" :key="book.bib_id" class="hot-book-item">
                     <span class="hot-rank" :class="{ 'top3': index < 3 }">{{ index + 1 }}</span>
                     <div class="hot-book-info">
-                      <div class="hot-book-title">{{ book.title }}</div>
+                      <div class="hot-book-title">{{ book.name }}</div>
                       <div class="hot-book-meta">
                         <span class="hot-book-category">{{ book.category }}</span>
                         <span class="hot-book-count">借阅 {{ book.borrow_count }} 次</span>
                       </div>
                     </div>
-                    <button @click="handleBorrow(book.id)" class="quick-borrow-btn">借阅</button>
+                    <button @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">借阅</button>
                   </div>
                 </div>
               </div>
@@ -333,15 +469,14 @@ onMounted(async () => {
             <div class="search-container">
               <div class="search-header">
                 <h2>图书检索</h2>
-                <p>输入关键词搜索您感兴趣的图书</p>
+                <p>输入关键词实时搜索您感兴趣的图书</p>
               </div>
               
               <div class="search-box">
                 <input 
                   v-model="searchQuery" 
                   type="text" 
-                  placeholder="请输入图书名称、分类或关键词..."
-                  @keyup.enter="handleSearch"
+                  placeholder="请输入图书名称、分类或关键词，实时搜索..."
                   class="search-input"
                 />
                 <button @click="handleSearch" class="search-button" :disabled="isSearching">
@@ -356,22 +491,23 @@ onMounted(async () => {
               <div v-if="searchResults.length > 0" class="search-results">
                 <div class="results-header">
                   <span>找到 {{ searchResults.length }} 条结果</span>
+                  <span class="search-hint">（实时搜索，输入更多内容可获得更精确的结果）</span>
                 </div>
                 <div class="results-grid">
-                  <div v-for="book in searchResults" :key="book.id" class="result-card">
+                  <div v-for="book in searchResults" :key="book.bib_id" class="result-card">
                     <div class="result-card-header">
                       <div class="result-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                           <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
                         </svg>
                       </div>
-                      <div class="result-title">{{ book.title }}</div>
+                      <div class="result-title">{{ book.name }}</div>
                     </div>
                     <div class="result-card-body">
                       <span class="result-category">{{ book.category }}</span>
                       <span class="result-count">借阅 {{ book.borrow_count }} 次</span>
                     </div>
-                    <button @click="handleBorrow(book.id)" class="result-borrow-btn">立即借阅</button>
+                    <button @click="handleBorrow(book.bib_id)" class="result-borrow-btn">立即借阅</button>
                   </div>
                 </div>
               </div>
@@ -395,12 +531,12 @@ onMounted(async () => {
               </div>
 
               <div class="hot-books-grid">
-                <div v-for="(book, index) in libraryData.hotBooks" :key="book.id" class="hot-book-card">
+                <div v-for="(book, index) in libraryData.hotBooks" :key="book.bib_id" class="hot-book-card">
                   <div class="hot-card-rank" :class="{ 'top3': index < 3 }">
                     <span>{{ index + 1 }}</span>
                   </div>
                   <div class="hot-card-content">
-                    <div class="hot-card-title">{{ book.title }}</div>
+                    <div class="hot-card-title">{{ book.name }}</div>
                     <div class="hot-card-meta">
                       <span class="hot-card-category">{{ book.category }}</span>
                     </div>
@@ -410,7 +546,7 @@ onMounted(async () => {
                         <span class="hot-stat-label">借阅次数</span>
                       </div>
                     </div>
-                    <button @click="handleBorrow(book.id)" class="hot-borrow-btn">
+                    <button @click="handleBorrow(book.bib_id)" class="hot-borrow-btn">
                       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
@@ -444,7 +580,7 @@ onMounted(async () => {
                     <div class="mybook-title">{{ record.title }}</div>
                     <div class="mybook-meta">
                       <span class="mybook-category">{{ record.category }}</span>
-                      <span class="mybook-action" :class="record.action === 'CKO' ? 'borrow' : 'return'">{{ record.action_name }}</span>
+                      <span class="mybook-action" :class="record.action === 'CKO' ? 'borrow' : 'return'">{{ record.action === 'CKO' ? '借出' : '归还' }}</span>
                     </div>
                   </div>
                   <div class="mybook-date">
@@ -576,6 +712,7 @@ onMounted(async () => {
   background: #f8fafc;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
+  position: relative;
 }
 
 .avatar {
@@ -587,6 +724,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
 .avatar-text {
@@ -599,6 +743,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.user-details:hover {
+  opacity: 0.8;
 }
 
 .user-name {
@@ -619,6 +769,131 @@ onMounted(async () => {
 .user-role-badge.user {
   color: #10b981;
   background: #ecfdf5;
+}
+
+/* 下拉菜单样式 */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dropdown-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dropdown-avatar span {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dropdown-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dropdown-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-role {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.dropdown-body {
+  padding: 8px 0;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #475569;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background: #f8fafc;
+  color: #6366f1;
+}
+
+.dropdown-item:active {
+  background: #f1f5f9;
+}
+
+.dropdown-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.dropdown-footer {
+  padding: 8px 0;
+}
+
+.logout-item {
+  color: #ef4444;
+}
+
+.logout-item:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* 下拉菜单过渡动画 */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-enter-from {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
 }
 
 .logout-btn {
@@ -1098,6 +1373,16 @@ onMounted(async () => {
   margin-bottom: 1rem;
   color: #64748b;
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.search-hint {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-style: italic;
 }
 
 .results-grid {
