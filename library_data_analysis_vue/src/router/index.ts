@@ -2,8 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import OverviewView from '../views/OverviewView.vue'
-import ReaderView from '../views/ReaderView.vue'
-import BookView from '../views/BookView.vue'
 import LibraryView from '../views/LibraryView.vue'
 import SettingsView from '../views/SettingsView.vue'
 
@@ -38,16 +36,6 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: OverviewView
-        },
-        {
-          path: 'readers',
-          name: 'readers',
-          component: ReaderView
-        },
-        {
-          path: 'books',
-          name: 'books',
-          component: BookView
         }
       ]
     }
