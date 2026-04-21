@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import bookIcon from '@/components/icons/book.png'
+import { authApi } from '@/api/auth'
 import '@/styles/login.css'
 
 const router = useRouter()
@@ -16,7 +16,7 @@ const rememberMe = ref(false)
 
 const fetchCaptcha = async () => {
   try {
-    const response = await fetch('/api/captcha')
+    const response = await authApi.getCaptcha()
     if (response.ok) {
       const data = await response.json()
       captchaKey.value = data.key
@@ -45,16 +45,12 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    const formData = new FormData()
-    formData.append('username', username.value)
-    formData.append('password', password.value)
-    formData.append('captcha', captcha.value)
-    formData.append('captcha_key', captchaKey.value)
-
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      body: formData
-    })
+    const response = await authApi.login(
+      username.value,
+      password.value,
+      captcha.value,
+      captchaKey.value
+    )
 
     if (response.ok) {
       const data = await response.json()
@@ -67,7 +63,6 @@ const handleLogin = async () => {
         localStorage.setItem('remember_username', username.value)
       }
       
-      // 根据角色跳转到不同系统
       if (data.system === 'library') {
         router.push('/library')
       } else {
@@ -90,19 +85,21 @@ const handleLogin = async () => {
 
 <template>
   <div class="login-page">
-    <!-- 左侧区域 -->
     <div class="login-left">
       <div class="left-content">
-        <!-- Logo -->
         <div class="brand">
-          <img class="logo-icon" :src="bookIcon" alt="logo" />
+          <div class="logo-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </div>
           <div class="brand-text">
-          <div class="brand-title">图书馆管理系统</div>
-          <div class="brand-subtitle">Library Management System</div>
-        </div>
+            <div class="brand-title">图书馆管理系统</div>
+            <div class="brand-subtitle">Library Management System</div>
+          </div>
         </div>
 
-        <!-- 主标题 -->
         <div class="hero">
           <h1>
             智慧图书馆 · <span class="highlight">一站式服务</span>
@@ -113,7 +110,6 @@ const handleLogin = async () => {
           </p>
         </div>
 
-        <!-- 功能列表 -->
         <div class="features">
           <div class="feature-item">
             <div class="feature-icon">
@@ -153,13 +149,11 @@ const handleLogin = async () => {
         </div>
       </div>
 
-      <!-- 版权信息 -->
       <div class="copyright">
-          © 2024 图书馆管理系统·让服务更智慧
-        </div>
+        © 2024 图书馆管理系统·让服务更智慧
+      </div>
     </div>
 
-    <!-- 右侧登录区域 -->
     <div class="login-right">
       <div class="login-card">
         <div class="login-header">
@@ -167,12 +161,10 @@ const handleLogin = async () => {
           <p>图书馆管理系统 - 根据您的角色自动进入相应系统</p>
         </div>
 
-        <!-- 错误提示 -->
         <div v-if="error" class="error-message">
           {{ error }}
         </div>
 
-        <!-- 登录表单 -->
         <form @submit.prevent="handleLogin" class="login-form">
           <div class="form-item">
             <div class="input-wrapper">
@@ -254,20 +246,21 @@ const handleLogin = async () => {
 <style scoped>
 .form-footer {
   text-align: center;
-  margin-top: 1.5rem;
-  font-size: 0.875rem;
-  color: #64748b;
+  margin-top: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
 }
 
 .link-btn {
-  color: #6366f1;
+  color: var(--color-primary-500);
   text-decoration: none;
-  font-weight: 500;
-  margin-left: 0.25rem;
+  font-weight: var(--font-medium);
+  margin-left: var(--space-1);
+  transition: color var(--transition-fast);
 }
 
 .link-btn:hover {
-  color: #4f46e5;
+  color: var(--color-primary-600);
   text-decoration: underline;
 }
 </style>

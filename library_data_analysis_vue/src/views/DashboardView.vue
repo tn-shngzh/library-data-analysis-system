@@ -1,24 +1,38 @@
 <script setup>
 import { ref, onMounted, markRaw, reactive } from 'vue'
-import { useRouter } from 'vue-router'
 import OverviewView from './OverviewView.vue'
 import ReaderView from './ReaderView.vue'
 import BookView from './BookView.vue'
 import BorrowView from './BorrowView.vue'
+import { overviewApi } from '@/api/overview'
+import { readerApi } from '@/api/readers'
+import { bookApi } from '@/api/books'
+import { borrowApi } from '@/api/borrows'
+import { useAuth } from '@/composables/useAuth'
+import { useTime } from '@/composables/useTime'
 
-const router = useRouter()
-const username = ref('')
-const role = ref('')
+const { username, role, checkAuth, logout } = useAuth()
+const { currentTime } = useTime()
+
 const activeTab = ref('overview')
-const currentTime = ref('')
 const dataLoaded = ref(false)
+const sidebarCollapsed = ref(false)
 
-const tabs = [
-  { id: 'overview', label: '总览', icon: 'grid', component: markRaw(OverviewView) },
-  { id: 'readers', label: '读者', icon: 'users', component: markRaw(ReaderView) },
-  { id: 'books', label: '图书', icon: 'book', component: markRaw(BookView) },
-  { id: 'borrows', label: '借阅', icon: 'arrow', component: markRaw(BorrowView) }
-]
+const tabs = ref([])
+
+const updateTabs = () => {
+  const baseTabs = [
+    { id: 'overview', label: '总览', icon: 'grid', component: markRaw(OverviewView) },
+    { id: 'readers', label: '读者', icon: 'users', component: markRaw(ReaderView) },
+    { id: 'books', label: '图书', icon: 'book', component: markRaw(BookView) }
+  ]
+  
+  if (role.value !== 'admin') {
+    baseTabs.push({ id: 'borrows', label: '借阅', icon: 'arrow', component: markRaw(BorrowView) })
+  }
+  
+  tabs.value = baseTabs
+}
 
 const overviewData = reactive({
   stats: null,
@@ -48,57 +62,34 @@ const borrowData = reactive({
   recentBorrows: null
 })
 
-const updateTime = () => {
-  const now = new Date()
-  const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }
-  currentTime.value = now.toLocaleDateString('zh-CN', options)
-}
-
 const preloadData = async () => {
   try {
-    const [
-      overviewStatsRes, overviewCatRes, overviewRecentRes,
-      readerStatsRes, readerTypesRes, readerTrendRes, readerTopRes,
-      bookStatsRes, bookCatRes, bookHotRes,
-      borrowStatsRes, borrowActionRes, borrowDegreeRes, borrowTopBorrowersRes, borrowTopBooksRes, borrowRecentRes
-    ] = await Promise.all([
-      fetch('/api/overview/stats'),
-      fetch('/api/overview/categories'),
-      fetch('/api/overview/recent-books'),
-      fetch('/api/readers/stats'),
-      fetch('/api/readers/types'),
-      fetch('/api/readers/monthly-trend'),
-      fetch('/api/readers/top'),
-      fetch('/api/books/stats'),
-      fetch('/api/books/categories'),
-      fetch('/api/books/hot'),
-      fetch('/api/borrows/stats'),
-      fetch('/api/borrows/action-stats'),
-      fetch('/api/borrows/degree-stats'),
-      fetch('/api/borrows/top-borrowers'),
-      fetch('/api/borrows/top-books'),
-      fetch('/api/borrows/recent')
+    const [overviewResult, readerResult, bookResult, borrowResult] = await Promise.all([
+      overviewApi.getAll(),
+      readerApi.getAll(),
+      bookApi.getAll(),
+      borrowApi.getAll()
     ])
 
-    if (overviewStatsRes.ok) overviewData.stats = await overviewStatsRes.json()
-    if (overviewCatRes.ok) overviewData.categories = await overviewCatRes.json()
-    if (overviewRecentRes.ok) overviewData.recentBooks = await overviewRecentRes.json()
+    if (overviewResult.stats) overviewData.stats = overviewResult.stats
+    if (overviewResult.categories) overviewData.categories = overviewResult.categories
+    if (overviewResult.recentBooks) overviewData.recentBooks = overviewResult.recentBooks
 
-    if (readerStatsRes.ok) readerData.stats = await readerStatsRes.json()
-    if (readerTypesRes.ok) readerData.readerTypes = await readerTypesRes.json()
-    if (readerTrendRes.ok) readerData.monthlyTrend = await readerTrendRes.json()
-    if (readerTopRes.ok) readerData.topReaders = await readerTopRes.json()
+    if (readerResult.stats) readerData.stats = readerResult.stats
+    if (readerResult.readerTypes) readerData.readerTypes = readerResult.readerTypes
+    if (readerResult.monthlyTrend) readerData.monthlyTrend = readerResult.monthlyTrend
+    if (readerResult.topReaders) readerData.topReaders = readerResult.topReaders
 
-    if (bookStatsRes.ok) bookData.stats = await bookStatsRes.json()
-    if (bookCatRes.ok) bookData.categories = await bookCatRes.json()
-    if (bookHotRes.ok) bookData.hotBooks = await bookHotRes.json()
+    if (bookResult.stats) bookData.stats = bookResult.stats
+    if (bookResult.categories) bookData.categories = bookResult.categories
+    if (bookResult.hotBooks) bookData.hotBooks = bookResult.hotBooks
 
-    if (borrowStatsRes.ok) borrowData.stats = await borrowStatsRes.json()
-    if (borrowActionRes.ok) borrowData.actionStats = await borrowActionRes.json()
-    if (borrowDegreeRes.ok) borrowData.degreeStats = await borrowDegreeRes.json()
-    if (borrowTopBorrowersRes.ok) borrowData.topBorrowers = await borrowTopBorrowersRes.json()
-    if (borrowTopBooksRes.ok) borrowData.topBooks = await borrowTopBooksRes.json()
-    if (borrowRecentRes.ok) borrowData.recentBorrows = await borrowRecentRes.json()
+    if (borrowResult.stats) borrowData.stats = borrowResult.stats
+    if (borrowResult.actionStats) borrowData.actionStats = borrowResult.actionStats
+    if (borrowResult.degreeStats) borrowData.degreeStats = borrowResult.degreeStats
+    if (borrowResult.topBorrowers) borrowData.topBorrowers = borrowResult.topBorrowers
+    if (borrowResult.topBooks) borrowData.topBooks = borrowResult.topBooks
+    if (borrowResult.recentBorrows) borrowData.recentBorrows = borrowResult.recentBorrows
 
     dataLoaded.value = true
   } catch (e) {
@@ -108,25 +99,13 @@ const preloadData = async () => {
 }
 
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    router.push('/login')
-    return
-  }
-  
-  username.value = localStorage.getItem('username') || ''
-  role.value = localStorage.getItem('role') || ''
-  updateTime()
-  setInterval(updateTime, 60000)
-  
+  if (!checkAuth()) return
+  updateTabs()
   await preloadData()
 })
 
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('role')
-  router.push('/login')
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
 }
 </script>
 
@@ -134,6 +113,13 @@ const logout = () => {
   <div class="dashboard">
     <header class="header">
       <div class="header-left">
+        <button class="sidebar-toggle" @click="toggleSidebar" :class="{ collapsed: sidebarCollapsed }">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
         <div class="logo-wrapper">
           <div class="logo-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -141,7 +127,7 @@ const logout = () => {
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
           </div>
-          <div class="title-group">
+          <div class="title-group" :class="{ hidden: sidebarCollapsed }">
             <h1>图书馆数据分析系统</h1>
             <span class="subtitle">Library Data Analytics</span>
           </div>
@@ -155,7 +141,7 @@ const logout = () => {
           <div class="avatar">
             <span class="avatar-text">{{ username.charAt(0).toUpperCase() }}</span>
           </div>
-          <div class="user-details">
+          <div class="user-details" :class="{ hidden: sidebarCollapsed }">
             <span class="user-name">{{ username }}</span>
             <span class="user-role-badge" :class="role">{{ role === 'admin' ? '管理员' : '用户' }}</span>
           </div>
@@ -171,7 +157,7 @@ const logout = () => {
     </header>
     
     <div class="layout">
-      <aside class="sidebar">
+      <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <nav class="nav-menu">
           <a v-for="tab in tabs" :key="tab.id" 
              class="nav-item" 
@@ -193,17 +179,16 @@ const logout = () => {
                 <polyline v-if="tab.icon === 'arrow'" points="19 12 12 19 5 12"/>
               </svg>
             </div>
-            <span class="nav-label">{{ tab.label }}</span>
-            <div class="nav-indicator" v-if="activeTab === tab.id"></div>
+            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ tab.label }}</span>
           </a>
         </nav>
         
-        <div class="sidebar-footer">
-          <div class="version-badge">v0.7.0</div>
+        <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
+          <div class="version-badge">v0.10.0</div>
         </div>
       </aside>
       
-      <main class="main-content">
+      <main class="main-content" :class="{ expanded: sidebarCollapsed }">
         <div v-if="!dataLoaded" class="loading-overlay">
           <div class="loading-spinner"></div>
           <span class="loading-text">正在加载数据...</span>
@@ -223,82 +208,125 @@ const logout = () => {
 <style scoped>
 .dashboard {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e8ecf4 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-neutral-50);
+  font-family: var(--font-sans);
+  color: var(--color-neutral-900);
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--gradient-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 0 32px;
+  padding: 0 var(--space-6);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 70px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.03);
+  height: var(--header-height);
+  border-bottom: 1px solid var(--color-neutral-200);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  z-index: var(--z-fixed);
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: var(--space-4);
+}
+
+.sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  color: var(--color-neutral-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-toggle:hover {
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-900);
+}
+
+.sidebar-toggle:active {
+  transform: scale(0.92);
+}
+
+.sidebar-toggle svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--transition-base);
+}
+
+.sidebar-toggle.collapsed svg {
+  transform: rotate(180deg);
 }
 
 .logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .logo-icon {
-  width: 42px;
-  height: 42px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .logo-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: white;
 }
 
 .title-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  transition: opacity var(--transition-base);
+}
+
+.title-group.hidden {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
 }
 
 .title-group h1 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .subtitle {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
-  letter-spacing: 0.05em;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--space-5);
 }
 
 .datetime {
@@ -308,136 +336,164 @@ const logout = () => {
 }
 
 .date {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
 }
 
 .user-menu {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
-  background: #f8fafc;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-neutral-200);
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 }
 
 .avatar-text {
   color: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .user-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  transition: opacity var(--transition-base);
+}
+
+.user-details.hidden {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
 }
 
 .user-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
 }
 
 .user-role-badge {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .user-role-badge.admin {
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--color-primary-400);
+  background: var(--color-primary-50);
 }
 
 .user-role-badge.user {
-  color: #10b981;
-  background: #ecfdf5;
+  color: var(--color-success-400);
+  background: var(--color-success-50);
 }
 
 .logout-btn {
   width: 32px;
   height: 32px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--color-neutral-500);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .logout-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .logout-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: var(--color-danger-50);
+  color: var(--color-danger-400);
 }
 
 .layout {
   display: flex;
-  padding-top: 70px;
+  padding-top: var(--header-height);
   min-height: 100vh;
 }
 
 .sidebar {
-  width: 220px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(226, 232, 240, 0.6);
-  padding: 24px 0;
+  width: var(--sidebar-width);
+  background: var(--color-neutral-0);
+  border-right: 1px solid var(--color-neutral-200);
+  padding: var(--space-5) 0;
   position: fixed;
-  top: 70px;
+  top: var(--header-height);
   bottom: 0;
   left: 0;
   display: flex;
   flex-direction: column;
+  transition: width var(--transition-slow);
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
 }
 
 .nav-menu {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 16px;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
   flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  color: #64748b;
+  gap: var(--space-3);
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  color: var(--color-neutral-500);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
   user-select: none;
   position: relative;
+  white-space: nowrap;
   overflow: hidden;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background: var(--gradient-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: transform var(--transition-base);
+}
+
+.nav-item.active::before {
+  transform: translateY(-50%) scaleY(1);
 }
 
 .nav-icon {
@@ -446,6 +502,7 @@ const logout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .nav-icon svg {
@@ -455,67 +512,56 @@ const logout = () => {
 
 .nav-label {
   flex: 1;
+  transition: opacity var(--transition-base);
+}
+
+.nav-label.hidden {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
 }
 
 .nav-item:hover {
-  background: rgba(99, 102, 241, 0.06);
-  color: #4f46e5;
-  transform: translateX(2px);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-900);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-  transform: translateX(0);
-}
-
-.nav-indicator {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 2px;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
+  border: 1px solid var(--color-primary-100);
 }
 
 .sidebar-footer {
-  padding: 16px;
+  padding: var(--space-4);
   text-align: center;
+  transition: opacity var(--transition-base);
+}
+
+.sidebar-footer.hidden {
+  opacity: 0;
 }
 
 .version-badge {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
-  background: #f1f5f9;
-  padding: 4px 10px;
-  border-radius: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-neutral-100);
+  border-radius: var(--radius-sm);
   display: inline-block;
 }
 
 .main-content {
   flex: 1;
-  margin-left: 220px;
-  padding: 28px 32px;
-  min-height: calc(100vh - 70px);
+  margin-left: var(--sidebar-width);
+  padding: var(--space-6);
+  transition: margin-left var(--transition-slow);
+  min-height: calc(100vh - var(--header-height));
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+.main-content.expanded {
+  margin-left: var(--sidebar-collapsed-width);
 }
 
 .loading-overlay {
@@ -523,26 +569,97 @@ const logout = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 150px);
-  gap: 20px;
+  min-height: 400px;
+  gap: var(--space-4);
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: #6366f1;
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 .loading-text {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+}
+
+.fade-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
 }
 
 @keyframes spin {
+  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .nav-label,
+  .sidebar .sidebar-footer {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .nav-label,
+  .sidebar .sidebar-footer {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+    padding: var(--space-4);
+  }
+
+  .title-group {
+    display: none;
+  }
+
+  .user-details {
+    display: none;
+  }
+
+  .header-right .datetime {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 var(--space-3);
+  }
+
+  .main-content {
+    padding: var(--space-3);
+  }
 }
 </style>

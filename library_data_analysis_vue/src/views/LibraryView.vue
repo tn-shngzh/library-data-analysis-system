@@ -1,20 +1,21 @@
 <script setup>
-import { ref, onMounted, reactive, watch, onUnmounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { libraryApi } from '@/api/library'
+import { useAuth } from '@/composables/useAuth'
+import { useTime } from '@/composables/useTime'
+import { useDropdown } from '@/composables/useDropdown'
+import { useSearch } from '@/composables/useSearch'
+import { getCache, setCache } from '@/utils/cache'
 
 const router = useRouter()
-const username = ref('')
-const role = ref('')
-const currentTime = ref('')
+const { username, role, checkAuth, logout } = useAuth()
+const { currentTime } = useTime()
+const { showDropdown, dropdownRef: userMenuRef, toggleDropdown, closeDropdown } = useDropdown()
+const { searchKeyword, searchResults, searchLoading: isSearching, performSearch, resetSearch } = useSearch()
+
 const dataLoaded = ref(false)
 const activeTab = ref('home')
-
-const searchQuery = ref('')
-const searchResults = ref([])
-const isSearching = ref(false)
-
-const showDropdown = ref(false)
-const userMenuRef = ref(null)
 
 const libraryData = reactive({
   stats: null,
@@ -24,21 +25,20 @@ const libraryData = reactive({
   myBorrows: null
 })
 
-const tabs = [
-  { id: 'home', label: '首页', icon: 'home' },
-  { id: 'search', label: '图书检索', icon: 'search' },
-  { id: 'hot', label: '热门图书', icon: 'fire' },
-  { id: 'mybooks', label: '我的借阅', icon: 'books' }
-]
+const tabs = ref([])
 
-const toggleDropdown = () => {
-  showDropdown.value = !showDropdown.value
-}
-
-const closeDropdown = (event) => {
-  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
-    showDropdown.value = false
+const updateTabs = () => {
+  const baseTabs = [
+    { id: 'home', label: '首页', icon: 'home' },
+    { id: 'search', label: '图书检索', icon: 'search' },
+    { id: 'hot', label: '热门图书', icon: 'fire' }
+  ]
+  
+  if (role.value !== 'admin') {
+    baseTabs.push({ id: 'mybooks', label: '我的借阅', icon: 'books' })
   }
+  
+  tabs.value = baseTabs
 }
 
 const goToSettings = () => {
@@ -56,137 +56,85 @@ const goToHotBooks = () => {
   activeTab.value = 'hot'
 }
 
-onMounted(() => {
-  document.addEventListener('click', closeDropdown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeDropdown)
-})
-
-// 防抖函数
-const debounce = (fn, delay) => {
-  let timer = null
-  return function(...args) {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      fn.apply(this, args)
-    }, delay)
-  }
-}
-
-// 实时搜索函数
-const performRealTimeSearch = async () => {
-  if (!searchQuery.value.trim()) {
-    searchResults.value = []
+const preloadData = async () => {
+  const cached = getCache('libraryData')
+  if (cached) {
+    libraryData.stats = cached.stats
+    libraryData.hotBooks = cached.hotBooks
+    libraryData.recentBorrows = cached.recentBorrows
+    libraryData.categories = cached.categories
+    dataLoaded.value = true
     return
   }
   
   try {
-    const response = await fetch(`/api/books/search?keyword=${encodeURIComponent(searchQuery.value)}&page=1&page_size=20`)
-    if (response.ok) {
-      const data = await response.json()
-      searchResults.value = data.books || []
-    }
-  } catch (e) {
-    console.error('搜索失败', e)
-  }
-}
+    const data = await libraryApi.getHomeData()
+    libraryData.stats = data.stats
+    libraryData.hotBooks = data.hotBooks
+    libraryData.recentBorrows = data.recentBorrows
+    libraryData.categories = data.categories
 
-// 创建防抖的搜索函数（500ms 延迟）
-const debouncedSearch = debounce(performRealTimeSearch, 500)
-
-// 监听搜索框输入
-watch(searchQuery, () => {
-  if (activeTab.value === 'search') {
-    debouncedSearch()
-  }
-})
-
-const updateTime = () => {
-  const now = new Date()
-  const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }
-  currentTime.value = now.toLocaleDateString('zh-CN', options)
-}
-
-const preloadData = async () => {
-  try {
-    const [statsRes, hotBooksRes, recentRes, categoriesRes] = await Promise.all([
-      fetch('/api/borrows/stats'),
-      fetch('/api/books/hot'),
-      fetch('/api/borrows/recent'),
-      fetch('/api/books/categories')
-    ])
-
-    if (statsRes.ok) libraryData.stats = await statsRes.json()
-    if (hotBooksRes.ok) libraryData.hotBooks = await hotBooksRes.json()
-    if (recentRes.ok) libraryData.recentBorrows = await recentRes.json()
-    if (categoriesRes.ok) libraryData.categories = await categoriesRes.json()
-
+    setCache('libraryData', {
+      stats: libraryData.stats,
+      hotBooks: libraryData.hotBooks,
+      recentBorrows: libraryData.recentBorrows,
+      categories: libraryData.categories
+    })
+    
     dataLoaded.value = true
   } catch (e) {
     console.error('加载数据失败', e)
+    if (cached) {
+      libraryData.stats = cached.stats
+      libraryData.hotBooks = cached.hotBooks
+      libraryData.recentBorrows = cached.recentBorrows
+      libraryData.categories = cached.categories
+    }
     dataLoaded.value = true
   }
 }
 
 const loadMyBorrows = async () => {
+  const cached = getCache('myBorrows', 5 * 60 * 1000)
+  if (cached) {
+    libraryData.myBorrows = cached
+    return
+  }
+  
   try {
-    const token = localStorage.getItem('token')
-    const response = await fetch('/api/borrows/my', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    if (response.ok) {
-      libraryData.myBorrows = await response.json()
+    const res = await libraryApi.getMyBorrows()
+    if (res.ok) {
+      const data = await res.json()
+      libraryData.myBorrows = data
+      setCache('myBorrows', data, 5 * 60 * 1000)
     }
   } catch (e) {
     console.error('加载借阅记录失败', e)
+    if (cached) {
+      libraryData.myBorrows = cached
+    }
   }
 }
 
 const handleSearch = async () => {
-  // 手动点击搜索按钮时，立即执行搜索，不使用防抖
-  if (!searchQuery.value.trim()) {
-    searchResults.value = []
+  if (!searchKeyword.value.trim()) {
+    resetSearch()
     return
   }
-  
-  isSearching.value = true
-  try {
-    const response = await fetch(`/api/books/search?keyword=${encodeURIComponent(searchQuery.value)}&page=1&page_size=50`)
-    if (response.ok) {
-      const data = await response.json()
-      searchResults.value = data.books || []
-    }
-  } catch (e) {
-    console.error('搜索失败', e)
-  } finally {
-    isSearching.value = false
-  }
+  await performSearch()
 }
 
 const handleBorrow = async (bookId) => {
   try {
-    const token = localStorage.getItem('token')
-    const response = await fetch('/api/borrows/borrow', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ book_id: bookId })
-    })
-    
-    if (response.ok) {
-      const result = await response.json()
+    const res = await libraryApi.borrowBook(bookId)
+    if (res.ok) {
+      const result = await res.json()
       if (result.success) {
         alert('借阅成功！')
         preloadData()
       }
     } else {
-      const err = await response.json()
+      const err = await res.json()
       alert(err.detail || '借阅失败')
     }
   } catch (e) {
@@ -201,25 +149,9 @@ const handleTabChange = (tabId) => {
   }
 }
 
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('role')
-  router.push('/login')
-}
-
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    router.push('/login')
-    return
-  }
-  
-  username.value = localStorage.getItem('username') || ''
-  role.value = localStorage.getItem('role') || ''
-  updateTime()
-  setInterval(updateTime, 60000)
-  
+  if (!checkAuth()) return
+  updateTabs()
   await preloadData()
 })
 </script>
@@ -254,7 +186,6 @@ onMounted(async () => {
             <span class="user-role-badge user">用户</span>
           </div>
           
-          <!-- 下拉菜单 -->
           <transition name="dropdown">
             <div v-if="showDropdown" class="dropdown-menu">
               <div class="dropdown-header">
@@ -278,7 +209,7 @@ onMounted(async () => {
                   <span>用户设置</span>
                 </div>
                 
-                <div class="dropdown-item" @click="goToMyBooks">
+                <div class="dropdown-item" v-if="role !== 'admin'" @click="goToMyBooks">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
@@ -354,7 +285,6 @@ onMounted(async () => {
         </div>
 
         <div v-else class="content-area">
-          <!-- 首页 -->
           <div v-if="activeTab === 'home'" class="tab-content">
             <div class="welcome-banner">
               <div class="welcome-text">
@@ -439,12 +369,12 @@ onMounted(async () => {
                         <span class="hot-book-count">借阅 {{ book.borrow_count }} 次</span>
                       </div>
                     </div>
-                    <button @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">借阅</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">借阅</button>
                   </div>
                 </div>
               </div>
 
-              <div class="home-section">
+              <div class="home-section" v-if="role !== 'admin'">
                 <h3 class="section-title">
                   <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
@@ -464,7 +394,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- 图书检索 -->
           <div v-if="activeTab === 'search'" class="tab-content">
             <div class="search-container">
               <div class="search-header">
@@ -474,7 +403,7 @@ onMounted(async () => {
               
               <div class="search-box">
                 <input 
-                  v-model="searchQuery" 
+                  v-model="searchKeyword" 
                   type="text" 
                   placeholder="请输入图书名称、分类或关键词，实时搜索..."
                   class="search-input"
@@ -507,12 +436,12 @@ onMounted(async () => {
                       <span class="result-category">{{ book.category }}</span>
                       <span class="result-count">借阅 {{ book.borrow_count }} 次</span>
                     </div>
-                    <button @click="handleBorrow(book.bib_id)" class="result-borrow-btn">立即借阅</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="result-borrow-btn">立即借阅</button>
                   </div>
                 </div>
               </div>
 
-              <div v-else-if="searchQuery && !isSearching" class="search-empty">
+              <div v-else-if="searchKeyword && !isSearching" class="search-empty">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="64" height="64" class="empty-icon">
                   <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                 </svg>
@@ -522,7 +451,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- 热门图书 -->
           <div v-if="activeTab === 'hot'" class="tab-content">
             <div class="hot-container">
               <div class="hot-header">
@@ -546,7 +474,7 @@ onMounted(async () => {
                         <span class="hot-stat-label">借阅次数</span>
                       </div>
                     </div>
-                    <button @click="handleBorrow(book.bib_id)" class="hot-borrow-btn">
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="hot-borrow-btn">
                       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
@@ -558,12 +486,11 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- 我的借阅 -->
           <div v-if="activeTab === 'mybooks'" class="tab-content">
             <div class="mybooks-container">
               <div class="mybooks-header">
-                <h2>我的借阅记录</h2>
-                <p>查看和管理您的借阅历史</p>
+                <h2>{{ role === 'admin' ? '全部借阅记录' : '我的借阅记录' }}</h2>
+                <p>{{ role === 'admin' ? '查看所有用户的借阅历史' : '查看和管理您的借阅历史' }}</p>
               </div>
 
               <div v-if="libraryData.myBorrows && libraryData.myBorrows.length > 0" class="mybooks-list">
@@ -581,6 +508,7 @@ onMounted(async () => {
                     <div class="mybook-meta">
                       <span class="mybook-category">{{ record.category }}</span>
                       <span class="mybook-action" :class="record.action === 'CKO' ? 'borrow' : 'return'">{{ record.action === 'CKO' ? '借出' : '归还' }}</span>
+                      <span v-if="role === 'admin' && record.borrower" class="mybook-borrower">{{ record.borrower }}</span>
                     </div>
                   </div>
                   <div class="mybook-date">
@@ -595,7 +523,7 @@ onMounted(async () => {
                   <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
                 </svg>
                 <h3>暂无借阅记录</h3>
-                <p>快去借阅您感兴趣的图书吧</p>
+                <p>{{ role === 'admin' ? '系统中还没有任何借阅记录' : '快去借阅您感兴趣的图书吧' }}</p>
                 <button @click="activeTab = 'search'" class="go-search-btn">
                   <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -614,26 +542,26 @@ onMounted(async () => {
 <style scoped>
 .library-system {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e8ecf4 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--gradient-surface);
+  font-family: var(--font-sans);
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--gradient-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 0 32px;
+  padding: 0 var(--space-8);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 70px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.03);
+  height: var(--header-height);
+  box-shadow: var(--shadow-sm);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  z-index: var(--z-fixed);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .header-left {
@@ -644,18 +572,18 @@ onMounted(async () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .logo-icon {
   width: 42px;
   height: 42px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  border-radius: 12px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .logo-icon svg {
@@ -671,25 +599,25 @@ onMounted(async () => {
 }
 
 .title-group h1 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .subtitle {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
-  letter-spacing: 0.05em;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  font-weight: var(--font-medium);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--space-6);
 }
 
 .datetime {
@@ -699,44 +627,44 @@ onMounted(async () => {
 }
 
 .date {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
 }
 
 .user-menu {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
-  background: #f8fafc;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
   position: relative;
 }
 
 .avatar {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 10px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: var(--shadow-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .avatar:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-primary-lg);
 }
 
 .avatar-text {
   color: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .user-details {
@@ -744,7 +672,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2px;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-base);
 }
 
 .user-details:hover {
@@ -752,53 +680,52 @@ onMounted(async () => {
 }
 
 .user-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
 }
 
 .user-role-badge {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .user-role-badge.user {
-  color: #10b981;
-  background: #ecfdf5;
+  color: var(--color-success-500);
+  background: var(--color-success-50);
 }
 
-/* 下拉菜单样式 */
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   width: 260px;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e2e8f0;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--color-neutral-200);
   overflow: hidden;
-  z-index: 1000;
+  z-index: var(--z-dropdown);
 }
 
 .dropdown-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--gradient-surface);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .dropdown-avatar {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 10px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -807,8 +734,8 @@ onMounted(async () => {
 
 .dropdown-avatar span {
   color: white;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .dropdown-user-info {
@@ -819,46 +746,46 @@ onMounted(async () => {
 }
 
 .dropdown-username {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dropdown-role {
-  font-size: 12px;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
 }
 
 .dropdown-divider {
   height: 1px;
-  background: #e2e8f0;
+  background: var(--color-neutral-200);
 }
 
 .dropdown-body {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: #475569;
-  font-size: 14px;
+  transition: all var(--transition-fast);
+  color: var(--color-neutral-600);
+  font-size: var(--text-sm);
 }
 
 .dropdown-item:hover {
-  background: #f8fafc;
-  color: #6366f1;
+  background: var(--color-neutral-50);
+  color: var(--color-primary-500);
 }
 
 .dropdown-item:active {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
 }
 
 .dropdown-icon {
@@ -868,22 +795,21 @@ onMounted(async () => {
 }
 
 .dropdown-footer {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .logout-item {
-  color: #ef4444;
+  color: var(--color-danger-500);
 }
 
 .logout-item:hover {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--color-danger-50);
+  color: var(--color-danger-600);
 }
 
-/* 下拉菜单过渡动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .dropdown-enter-from {
@@ -900,14 +826,14 @@ onMounted(async () => {
   width: 32px;
   height: 32px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--color-neutral-400);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .logout-btn svg {
@@ -916,61 +842,61 @@ onMounted(async () => {
 }
 
 .logout-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: var(--color-danger-50);
+  color: var(--color-danger-500);
 }
 
 .layout {
   display: flex;
-  padding-top: 70px;
+  padding-top: var(--header-height);
   min-height: 100vh;
 }
 
 .sidebar {
-  width: 240px;
-  background: rgba(255, 255, 255, 0.7);
+  width: var(--sidebar-width);
+  background: var(--gradient-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(226, 232, 240, 0.6);
+  border-right: 1px solid var(--color-neutral-200);
   position: fixed;
-  top: 70px;
+  top: var(--header-height);
   bottom: 0;
   left: 0;
   display: flex;
   flex-direction: column;
-  z-index: 50;
+  z-index: var(--z-sticky);
 }
 
 .nav-menu {
   flex: 1;
-  padding: 16px 12px;
+  padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
+  gap: var(--space-3);
+  padding: 12px var(--space-4);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   position: relative;
-  color: #64748b;
+  color: var(--color-neutral-500);
   text-decoration: none;
 }
 
 .nav-item:hover {
-  background: rgba(99, 102, 241, 0.06);
-  color: #6366f1;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  color: #6366f1;
-  font-weight: 600;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
+  font-weight: var(--font-semibold);
 }
 
 .nav-icon {
@@ -987,8 +913,8 @@ onMounted(async () => {
 }
 
 .nav-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 
 .nav-indicator {
@@ -998,27 +924,27 @@ onMounted(async () => {
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  background: var(--gradient-primary);
   border-radius: 2px;
 }
 
 .sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid rgba(226, 232, 240, 0.6);
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-neutral-200);
   text-align: center;
 }
 
 .version-badge {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  font-weight: var(--font-medium);
 }
 
 .main-content {
   flex: 1;
-  margin-left: 240px;
-  padding: 24px 32px;
-  min-height: calc(100vh - 70px);
+  margin-left: var(--sidebar-width);
+  padding: var(--space-6) var(--space-8);
+  min-height: calc(100vh - var(--header-height));
 }
 
 .loading-overlay {
@@ -1027,25 +953,21 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .loading-text {
-  color: #64748b;
-  font-size: 14px;
+  color: var(--color-neutral-500);
+  font-size: var(--text-sm);
 }
 
 .content-area {
@@ -1054,30 +976,41 @@ onMounted(async () => {
 }
 
 .tab-content {
-  animation: fadeIn 0.3s ease;
+  animation: fadeInUp 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .welcome-banner {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 16px;
-  padding: 2rem;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
   display: flex;
   justify-content: space-between;
   align-items: center;
   color: white;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  margin-bottom: var(--space-6);
+  box-shadow: var(--shadow-primary-lg);
 }
 
 .welcome-text h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
 }
 
 .welcome-text p {
@@ -1088,53 +1021,53 @@ onMounted(async () => {
 .stats-overview {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
-  background: white;
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   display: flex;
   align-items: center;
-  gap: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s, box-shadow 0.2s;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .stat-card.primary .stat-icon {
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
 }
 
 .stat-card.success .stat-icon {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background: var(--color-success-50);
+  color: var(--color-success-500);
 }
 
 .stat-card.warning .stat-icon {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
+  background: var(--color-warning-50);
+  color: var(--color-warning-500);
 }
 
 .stat-card.info .stat-icon {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: var(--color-info-50);
+  color: var(--color-info-500);
 }
 
 .stat-info {
@@ -1142,75 +1075,75 @@ onMounted(async () => {
 }
 
 .stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
 }
 
 .stat-label {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  margin-top: var(--space-1);
 }
 
 .home-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .home-section {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0 0 1rem 0;
-  color: #1e293b;
-  font-size: 1rem;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4) 0;
+  color: var(--color-neutral-900);
+  font-size: var(--text-base);
 }
 
 .hot-books-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .hot-book-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: #f8fafc;
-  border-radius: 10px;
-  transition: background 0.2s;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+  transition: background var(--transition-base);
 }
 
 .hot-book-item:hover {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
 }
 
 .hot-rank {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: #e2e8f0;
-  color: #64748b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-500);
   flex-shrink: 0;
 }
 
 .hot-rank.top3 {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: var(--gradient-primary);
   color: white;
 }
 
@@ -1220,9 +1153,9 @@ onMounted(async () => {
 }
 
 .hot-book-title {
-  font-weight: 500;
-  color: #1e293b;
-  font-size: 0.9rem;
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-800);
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1230,127 +1163,132 @@ onMounted(async () => {
 
 .hot-book-meta {
   display: flex;
-  gap: 0.75rem;
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-top: 0.25rem;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  margin-top: var(--space-1);
 }
 
 .quick-borrow-btn {
-  padding: 0.35rem 0.75rem;
-  background: #6366f1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  transition: background 0.2s;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
   flex-shrink: 0;
 }
 
 .quick-borrow-btn:hover {
-  background: #4f46e5;
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
 }
 
 .recent-borrows-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .recent-borrow-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
 }
 
 .recent-borrow-date {
-  color: #94a3b8;
-  font-size: 0.8rem;
+  color: var(--color-neutral-400);
+  font-size: var(--text-xs);
   flex-shrink: 0;
   width: 80px;
 }
 
 .recent-borrow-info {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex: 1;
 }
 
 .recent-borrow-action {
-  color: #6366f1;
-  font-weight: 500;
+  color: var(--color-primary-500);
+  font-weight: var(--font-medium);
 }
 
 .recent-borrow-degree {
-  color: #64748b;
+  color: var(--color-neutral-500);
 }
 
 .search-container, .hot-container, .mybooks-container {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-sm);
 }
 
 .search-header, .hot-header, .mybooks-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: var(--space-8);
 }
 
 .search-header h2, .hot-header h2, .mybooks-header h2 {
-  margin: 0 0 0.5rem 0;
-  color: #1e293b;
+  margin: 0 0 var(--space-2) 0;
+  color: var(--color-neutral-900);
 }
 
 .search-header p, .hot-header p, .mybooks-header p {
   margin: 0;
-  color: #64748b;
+  color: var(--color-neutral-500);
 }
 
 .search-box {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
   max-width: 700px;
-  margin: 0 auto 2rem;
+  margin: 0 auto var(--space-8);
 }
 
 .search-input {
   flex: 1;
-  padding: 0.875rem 1.25rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 1rem;
+  padding: 14px var(--space-5);
+  border: 2px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  background: var(--color-neutral-50);
 }
 
 .search-input:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary-500);
+  background: var(--color-neutral-0);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
 }
 
 .search-button {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  background: #6366f1;
+  gap: var(--space-2);
+  padding: 14px var(--space-6);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: background 0.2s;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
 }
 
 .search-button:hover:not(:disabled) {
-  background: #4f46e5;
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
 }
 
 .search-button:disabled {
@@ -1368,53 +1306,55 @@ onMounted(async () => {
 }
 
 .results-header {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 1rem;
-  color: #64748b;
-  font-size: 0.9rem;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-neutral-200);
+  margin-bottom: var(--space-4);
+  color: var(--color-neutral-500);
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .search-hint {
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
   font-style: italic;
 }
 
 .results-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .result-card {
-  background: #f8fafc;
-  border-radius: 12px;
-  padding: 1.25rem;
-  transition: background 0.2s;
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  transition: all var(--transition-base);
 }
 
 .result-card:hover {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .result-card-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .result-icon {
   width: 40px;
   height: 40px;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
-  border-radius: 10px;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1422,9 +1362,9 @@ onMounted(async () => {
 }
 
 .result-title {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 0.95rem;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1432,78 +1372,81 @@ onMounted(async () => {
 
 .result-card-body {
   display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
-  color: #64748b;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
 }
 
 .result-borrow-btn {
   width: 100%;
-  padding: 0.6rem;
-  background: #6366f1;
+  padding: var(--space-3);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
 }
 
 .result-borrow-btn:hover {
-  background: #4f46e5;
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
 }
 
 .search-empty {
   text-align: center;
-  padding: 3rem 0;
-  color: #94a3b8;
+  padding: var(--space-12) 0;
+  color: var(--color-neutral-400);
 }
 
 .empty-icon {
-  color: #e2e8f0;
-  margin-bottom: 1rem;
+  color: var(--color-neutral-200);
+  margin-bottom: var(--space-4);
 }
 
 .empty-hint {
-  font-size: 0.85rem;
-  margin-top: 0.5rem;
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
 }
 
 .hot-books-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .hot-book-card {
-  background: #f8fafc;
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   display: flex;
-  gap: 1rem;
-  transition: background 0.2s;
+  gap: var(--space-4);
+  transition: all var(--transition-base);
 }
 
 .hot-book-card:hover {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .hot-card-rank {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  background: #e2e8f0;
-  color: #64748b;
+  font-weight: var(--font-bold);
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-500);
   flex-shrink: 0;
 }
 
 .hot-card-rank.top3 {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: var(--gradient-primary);
   color: white;
 }
 
@@ -1513,87 +1456,88 @@ onMounted(async () => {
 }
 
 .hot-card-title {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 0.95rem;
-  margin-bottom: 0.25rem;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .hot-card-meta {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  margin-bottom: var(--space-2);
 }
 
 .hot-card-stats {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 .hot-stat {
   display: flex;
   align-items: baseline;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .hot-stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #6366f1;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-primary-500);
 }
 
 .hot-stat-label {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
 }
 
 .hot-borrow-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   width: 100%;
-  padding: 0.5rem;
-  background: #6366f1;
+  padding: var(--space-2);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: background 0.2s;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
 }
 
 .hot-borrow-btn:hover {
-  background: #4f46e5;
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
 }
 
 .mybooks-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .mybook-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  background: #f8fafc;
-  border-radius: 10px;
-  transition: background 0.2s;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
 }
 
 .mybook-item:hover {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
 }
 
 .mybook-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1601,13 +1545,13 @@ onMounted(async () => {
 }
 
 .mybook-icon.borrow {
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
 }
 
 .mybook-icon.return {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background: var(--color-success-50);
+  color: var(--color-success-500);
 }
 
 .mybook-info {
@@ -1616,9 +1560,9 @@ onMounted(async () => {
 }
 
 .mybook-title {
-  font-weight: 500;
-  color: #1e293b;
-  margin-bottom: 0.25rem;
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-800);
+  margin-bottom: var(--space-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1627,29 +1571,38 @@ onMounted(async () => {
 .mybook-meta {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .mybook-category {
-  font-size: 0.85rem;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
 }
 
 .mybook-action {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
 }
 
 .mybook-action.borrow {
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
 }
 
 .mybook-action.return {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background: var(--color-success-50);
+  color: var(--color-success-500);
+}
+
+.mybook-borrower {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-50);
+  color: var(--color-warning-500);
+  font-weight: var(--font-medium);
 }
 
 .mybook-date {
@@ -1658,60 +1611,105 @@ onMounted(async () => {
 }
 
 .mybook-date-value {
-  font-size: 0.9rem;
-  color: #1e293b;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-800);
+  font-weight: var(--font-medium);
 }
 
 .mybook-time {
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
 }
 
 .mybooks-empty {
   text-align: center;
-  padding: 3rem 0;
-  color: #94a3b8;
+  padding: var(--space-12) 0;
+  color: var(--color-neutral-400);
 }
 
 .mybooks-empty h3 {
-  color: #64748b;
-  margin: 1rem 0 0.5rem;
+  color: var(--color-neutral-500);
+  margin: var(--space-4) 0 var(--space-2);
 }
 
 .mybooks-empty p {
-  margin: 0 0 1.5rem;
+  margin: 0 0 var(--space-6);
 }
 
 .go-search-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #6366f1;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
 }
 
 .go-search-btn:hover {
-  background: #4f46e5;
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 1024px) {
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .nav-label,
+  .sidebar .nav-footer {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+    padding: var(--space-4);
+  }
+
   .home-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .search-box {
     flex-direction: column;
   }
-  
+
   .stats-overview {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-right .datetime {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 var(--space-3);
+  }
+
+  .main-content {
+    padding: var(--space-3);
+  }
+
+  .stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-banner {
+    padding: var(--space-5);
+    flex-direction: column;
+    text-align: center;
   }
 }
 </style>

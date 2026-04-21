@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import bookIcon from '@/components/icons/book.png'
+import { authApi } from '@/api/auth'
 import '@/styles/login.css'
 
 const router = useRouter()
@@ -63,14 +63,7 @@ const handleRegister = async () => {
   loading.value = true
 
   try {
-    const formData = new FormData()
-    formData.append('username', username.value.trim())
-    formData.append('password', password.value)
-
-    const response = await fetch('/api/register', {
-      method: 'POST',
-      body: formData
-    })
+    const response = await authApi.register(username.value, password.value)
 
     if (response.ok) {
       const data = await response.json()
@@ -96,7 +89,12 @@ const handleRegister = async () => {
     <div class="login-left">
       <div class="left-content">
         <div class="brand">
-          <img class="logo-icon" :src="bookIcon" alt="logo" />
+          <div class="logo-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </div>
           <div class="brand-text">
             <div class="brand-title">图书馆管理系统</div>
             <div class="brand-subtitle">Library Management System</div>
@@ -236,31 +234,33 @@ const handleRegister = async () => {
 
 <style scoped>
 .success-message {
-  background: #ecfdf5;
-  border: 1px solid #6ee7b7;
-  color: #065f46;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.875rem;
+  background: var(--color-success-50);
+  border: 1px solid var(--color-success-100);
+  color: var(--color-success-600);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm);
+  animation: fadeInUp 0.3s ease;
 }
 
 .form-footer {
   text-align: center;
-  margin-top: 1.5rem;
-  font-size: 0.875rem;
-  color: #64748b;
+  margin-top: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
 }
 
 .link-btn {
-  color: #6366f1;
+  color: var(--color-primary-500);
   text-decoration: none;
-  font-weight: 500;
-  margin-left: 0.25rem;
+  font-weight: var(--font-medium);
+  margin-left: var(--space-1);
+  transition: color var(--transition-fast);
 }
 
 .link-btn:hover {
-  color: #4f46e5;
+  color: var(--color-primary-600);
   text-decoration: underline;
 }
 </style>

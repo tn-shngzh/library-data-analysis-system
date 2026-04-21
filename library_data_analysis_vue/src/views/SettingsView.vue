@@ -1,16 +1,17 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
+import { useTime } from '@/composables/useTime'
+import { useDropdown } from '@/composables/useDropdown'
 
 const router = useRouter()
-const username = ref('')
-const role = ref('')
-const currentTime = ref('')
+const { username, role, logout } = useAuth()
+const { currentTime } = useTime()
+const { showDropdown, dropdownRef: userMenuRef, toggleDropdown } = useDropdown()
+
 const isLoading = ref(true)
 const activeMenu = ref('profile')
-
-const showDropdown = ref(false)
-const userMenuRef = ref(null)
 
 const settingsForm = ref({
   nickname: '',
@@ -29,51 +30,14 @@ const menuItems = [
   { id: 'security', label: '安全设置', icon: 'shield' }
 ]
 
-const toggleDropdown = () => {
-  showDropdown.value = !showDropdown.value
-}
-
-const closeDropdown = (event) => {
-  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
-    showDropdown.value = false
-  }
-}
-
 const goToLibrary = () => {
   router.push('/library')
 }
 
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('role')
-  router.push('/login')
-}
-
 onMounted(() => {
-  username.value = localStorage.getItem('username') || '未知用户'
-  role.value = localStorage.getItem('role') || 'user'
   settingsForm.value.nickname = username.value
   isLoading.value = false
-  
-  document.addEventListener('click', closeDropdown)
-  updateTime()
-  setInterval(updateTime, 60000)
 })
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeDropdown)
-})
-
-const updateTime = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  currentTime.value = `${year}-${month}-${day} ${hours}:${minutes}`
-}
 
 const showMessage = (type, text) => {
   message.value = { type, text }
@@ -386,26 +350,26 @@ const handleChangePassword = () => {
 <style scoped>
 .settings-system {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e8ecf4 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--gradient-surface);
+  font-family: var(--font-sans);
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--gradient-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 0 32px;
+  padding: 0 var(--space-8);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 70px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.03);
+  height: var(--header-height);
+  box-shadow: var(--shadow-sm);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  z-index: var(--z-fixed);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .header-left {
@@ -416,18 +380,18 @@ const handleChangePassword = () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .logo-icon {
   width: 42px;
   height: 42px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  border-radius: 12px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .logo-icon svg {
@@ -443,24 +407,24 @@ const handleChangePassword = () => {
 }
 
 .title-group h1 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-800);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .subtitle {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
-  letter-spacing: 0.05em;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  font-weight: var(--font-medium);
+  letter-spacing: var(--tracking-wide);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .datetime {
@@ -471,44 +435,44 @@ const handleChangePassword = () => {
 }
 
 .date {
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-500);
 }
 
 .user-menu {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
-  background: #f8fafc;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
   position: relative;
 }
 
 .avatar {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 10px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: var(--shadow-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .avatar:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-primary-lg);
 }
 
 .avatar-text {
   color: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .user-details {
@@ -516,7 +480,7 @@ const handleChangePassword = () => {
   flex-direction: column;
   gap: 2px;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-base);
 }
 
 .user-details:hover {
@@ -524,23 +488,23 @@ const handleChangePassword = () => {
 }
 
 .user-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
 }
 
 .user-role-badge {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .user-role-badge.user {
-  color: #10b981;
-  background: #ecfdf5;
+  color: var(--color-success-500);
+  background: var(--color-success-50);
 }
 
 .dropdown-menu {
@@ -548,28 +512,28 @@ const handleChangePassword = () => {
   top: calc(100% + 8px);
   right: 0;
   width: 260px;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e2e8f0;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--color-neutral-200);
   overflow: hidden;
-  z-index: 1000;
+  z-index: var(--z-dropdown);
 }
 
 .dropdown-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--gradient-surface);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .dropdown-avatar {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 10px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -578,8 +542,8 @@ const handleChangePassword = () => {
 
 .dropdown-avatar span {
   color: white;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .dropdown-user-info {
@@ -590,46 +554,46 @@ const handleChangePassword = () => {
 }
 
 .dropdown-username {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dropdown-role {
-  font-size: 12px;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
 }
 
 .dropdown-divider {
   height: 1px;
-  background: #e2e8f0;
+  background: var(--color-neutral-200);
 }
 
 .dropdown-body {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: #475569;
-  font-size: 14px;
+  transition: all var(--transition-fast);
+  color: var(--color-neutral-600);
+  font-size: var(--text-sm);
 }
 
 .dropdown-item:hover {
-  background: #f8fafc;
-  color: #6366f1;
+  background: var(--color-neutral-50);
+  color: var(--color-primary-500);
 }
 
 .dropdown-item:active {
-  background: #f1f5f9;
+  background: var(--color-neutral-100);
 }
 
 .dropdown-icon {
@@ -639,21 +603,21 @@ const handleChangePassword = () => {
 }
 
 .dropdown-footer {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .logout-item {
-  color: #ef4444;
+  color: var(--color-danger-500);
 }
 
 .logout-item:hover {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--color-danger-50);
+  color: var(--color-danger-600);
 }
 
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .dropdown-enter-from {
@@ -670,14 +634,14 @@ const handleChangePassword = () => {
   width: 32px;
   height: 32px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--color-neutral-400);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .logout-btn svg {
@@ -686,60 +650,60 @@ const handleChangePassword = () => {
 }
 
 .logout-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: var(--color-danger-50);
+  color: var(--color-danger-500);
 }
 
 .layout {
   display: flex;
-  margin-top: 70px;
-  min-height: calc(100vh - 70px);
+  margin-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
 }
 
 .sidebar {
-  width: 240px;
-  background: rgba(255, 255, 255, 0.9);
+  width: var(--sidebar-width);
+  background: var(--gradient-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(226, 232, 240, 0.6);
-  padding: 24px 0;
+  border-right: 1px solid var(--color-neutral-200);
+  padding: var(--space-6) 0;
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 70px;
+  top: var(--header-height);
   bottom: 0;
   left: 0;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--shadow-xs);
 }
 
 .nav-menu {
   flex: 1;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  margin-bottom: 4px;
-  border-radius: 10px;
+  gap: var(--space-3);
+  padding: 12px var(--space-4);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   position: relative;
-  color: #64748b;
+  color: var(--color-neutral-500);
   text-decoration: none;
 }
 
 .nav-item:hover {
-  background: #f8fafc;
-  color: #475569;
+  background: var(--color-neutral-50);
+  color: var(--color-neutral-600);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
-  color: #6366f1;
-  font-weight: 600;
+  background: var(--color-primary-50);
+  color: var(--color-primary-500);
+  font-weight: var(--font-semibold);
 }
 
 .nav-icon {
@@ -756,8 +720,8 @@ const handleChangePassword = () => {
 }
 
 .nav-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 
 .nav-indicator {
@@ -767,31 +731,31 @@ const handleChangePassword = () => {
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--gradient-primary);
   border-radius: 0 2px 2px 0;
 }
 
 .sidebar-footer {
-  padding: 16px 12px;
-  border-top: 1px solid #e2e8f0;
+  padding: var(--space-4) var(--space-3);
+  border-top: 1px solid var(--color-neutral-200);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-base);
 }
 
 .back-btn svg {
@@ -801,20 +765,20 @@ const handleChangePassword = () => {
 
 .back-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .version-badge {
   text-align: center;
-  font-size: 11px;
-  color: #94a3b8;
-  padding: 4px 0;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  padding: var(--space-1) 0;
 }
 
 .main-content {
   flex: 1;
-  margin-left: 240px;
-  padding: 32px;
+  margin-left: var(--sidebar-width);
+  padding: var(--space-8);
   position: relative;
 }
 
@@ -824,25 +788,21 @@ const handleChangePassword = () => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .loading-text {
-  font-size: 14px;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
 }
 
 .content-area {
@@ -850,127 +810,116 @@ const handleChangePassword = () => {
 }
 
 .message {
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 
 .message.success {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
+  background: var(--color-success-50);
+  color: var(--color-success-600);
+  border: 1px solid var(--color-success-100);
 }
 
 .message.error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: var(--color-danger-50);
+  color: var(--color-danger-600);
+  border: 1px solid var(--color-danger-100);
 }
 
 .settings-panel {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: fadeInUp 0.3s ease;
 }
 
 .panel-header {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-8);
 }
 
 .panel-header h1 {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.02em;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  margin: 0 0 var(--space-2) 0;
+  letter-spacing: var(--tracking-tight);
 }
 
 .panel-header p {
-  font-size: 14px;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
   margin: 0;
 }
 
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .form-group label {
   display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-700);
+  margin-bottom: var(--space-2);
 }
 
 .input {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #1e293b;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-800);
+  background: var(--color-neutral-0);
+  transition: all var(--transition-base);
   box-sizing: border-box;
 }
 
 .input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
 }
 
 .input.disabled {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: var(--color-neutral-50);
+  color: var(--color-neutral-400);
   cursor: not-allowed;
 }
 
 .form-hint {
   display: block;
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  margin-top: var(--space-2);
 }
 
 .btn {
-  padding: 12px 24px;
+  padding: var(--space-3) var(--space-6);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 8px;
+  transition: all var(--transition-base);
+  margin-top: var(--space-2);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--gradient-primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: var(--shadow-primary);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-primary-lg);
 }
 
 .btn-warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  background: var(--gradient-warning);
   color: white;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+  box-shadow: var(--shadow-warning);
 }
 
 .btn-warning:hover {
@@ -979,9 +928,9 @@ const handleChangePassword = () => {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: var(--gradient-danger);
   color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+  box-shadow: var(--shadow-danger);
 }
 
 .btn-danger:disabled {
@@ -991,25 +940,25 @@ const handleChangePassword = () => {
 }
 
 .security-info {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-8);
 }
 
 .info-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #ffffff;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  border: 1px solid #e2e8f0;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
 }
 
 .info-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
-  border-radius: 12px;
+  background: var(--color-primary-50);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1019,45 +968,85 @@ const handleChangePassword = () => {
 .info-icon svg {
   width: 24px;
   height: 24px;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 
 .info-content h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 4px 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-800);
+  margin: 0 0 var(--space-1) 0;
 }
 
 .info-content p {
-  font-size: 14px;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
   margin: 0;
 }
 
 .danger-zone {
-  padding: 24px;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #fecaca;
+  padding: var(--space-6);
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-danger-100);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 12px 0;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-3) 0;
 }
 
 .section-title.danger {
-  color: #dc2626;
+  color: var(--color-danger-600);
 }
 
 .danger-text {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0 0 16px 0;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  margin: 0 0 var(--space-4) 0;
+}
+
+@media (max-width: 1024px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .nav-label,
+  .sidebar .sidebar-footer {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+    padding: var(--space-4);
+  }
+
+  .header-right .datetime {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 var(--space-3);
+  }
+
+  .main-content {
+    padding: var(--space-3);
+  }
+
+  .form-group {
+    margin-bottom: var(--space-4);
+  }
 }
 </style>

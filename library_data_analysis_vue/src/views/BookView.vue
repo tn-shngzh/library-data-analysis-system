@@ -1,5 +1,11 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { bookApi } from '@/api/books'
+import { formatNumber } from '@/utils/format'
+import { BOOK_STAT_CARDS } from '@/constants'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import CategoryList from '@/components/CategoryList.vue'
 
 const props = defineProps({
   preloadedData: {
@@ -30,22 +36,15 @@ const searchTotalPages = ref(0)
 const searchLoading = ref(false)
 const hasSearched = ref(false)
 
+const statCards = BOOK_STAT_CARDS
+
 const fetchBookData = async () => {
   loading.value = true
   try {
-    const [statsRes, catRes, hotRes] = await Promise.all([
-      fetch('/api/books/stats'),
-      fetch('/api/books/categories'),
-      fetch('/api/books/hot')
-    ])
-
-    if (statsRes.ok) bookStats.value = await statsRes.json()
-    if (catRes.ok) categories.value = await catRes.json()
-    if (hotRes.ok) {
-      const hotData = await hotRes.json()
-      console.log('热门图书数据:', hotData)
-      hotBooks.value = hotData
-    }
+    const data = await bookApi.getAll()
+    if (data.stats) bookStats.value = data.stats
+    if (data.categories) categories.value = data.categories
+    if (data.hotBooks) hotBooks.value = data.hotBooks
   } catch (e) {
     console.error('获取数据失败', e)
   } finally {
@@ -55,7 +54,7 @@ const fetchBookData = async () => {
 
 const fetchCategoriesList = async () => {
   try {
-    const res = await fetch('/api/books/categories-list')
+    const res = await bookApi.getCategoriesList()
     if (res.ok) categoriesList.value = await res.json()
   } catch (e) {
     console.error('获取分类列表失败', e)
@@ -67,16 +66,9 @@ const performSearch = async (page = 1) => {
   hasSearched.value = true
   searchPage.value = page
   try {
-    const params = new URLSearchParams({
-      keyword: searchKeyword.value,
-      category: searchCategory.value,
-      page: page,
-      page_size: searchPageSize.value
-    })
-    const res = await fetch(`/api/books/search?${params}`)
+    const res = await bookApi.search(searchKeyword.value, searchCategory.value, page, searchPageSize.value)
     if (res.ok) {
       const data = await res.json()
-      console.log('检索结果:', data)
       searchResults.value = data.books
       searchTotal.value = data.total
       searchTotalPages.value = data.total_pages
@@ -119,90 +111,18 @@ onMounted(() => {
   }
   fetchCategoriesList()
 })
-
-const formatNumber = (num) => num.toLocaleString()
 </script>
 
 <template>
   <div class="books">
-    <div class="page-header">
-      <div class="header-content">
-        <div>
-          <h2>图书管理</h2>
-          <p class="page-desc">馆藏图书数据统计</p>
-        </div>
-        <div class="header-actions">
-          <button class="refresh-btn" @click="fetchBookData" :disabled="loading">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'spinning': loading }">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            <span>刷新</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <PageHeader title="图书管理" description="馆藏图书数据统计" :loading="loading" @refresh="fetchBookData" />
 
-    <div v-if="loading" class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <span>加载中...</span>
-      </div>
-    </div>
-    <template v-else>
+    <LoadingSpinner :loading="loading">
       <div class="stats-grid">
-        <div class="stat-card" style="--accent: #6366f1">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-          </div>
+        <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
           <div class="stat-info">
-            <span class="stat-label">总藏书量</span>
-            <span class="stat-value">{{ formatNumber(bookStats.total_items) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #8b5cf6">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">本月入库</span>
-            <span class="stat-value">{{ formatNumber(bookStats.month_items) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #06b6d4">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">借阅率</span>
-            <span class="stat-value">{{ bookStats.borrow_rate }}<span class="unit">%</span></span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #ef4444">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" y1="9" x2="9" y2="15"/>
-              <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">零借阅</span>
-            <span class="stat-value">{{ formatNumber(bookStats.zero_borrow) }}</span>
+            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-value">{{ formatNumber(bookStats[card.key]) }}</span>
           </div>
           <div class="stat-glow"></div>
         </div>
@@ -219,27 +139,7 @@ const formatNumber = (num) => num.toLocaleString()
             分类占比
           </h3>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>分类</th>
-              <th>数量</th>
-              <th>占比</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(cat, index) in categories" :key="cat.name" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
-              <td><span class="category-tag">{{ cat.name }}</span></td>
-              <td class="count-cell">{{ formatNumber(cat.count) }} <span class="unit">册</span></td>
-              <td>
-                <div class="percent-bar">
-                  <div class="percent-fill" :style="{ width: cat.percent + '%' }"></div>
-                  <span class="percent-text">{{ cat.percent }}%</span>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <CategoryList :items="categories" />
       </div>
 
       <div class="card">
@@ -292,9 +192,9 @@ const formatNumber = (num) => num.toLocaleString()
           <div class="search-inputs">
             <div class="input-group">
               <label>关键词</label>
-              <input 
-                v-model="searchKeyword" 
-                type="text" 
+              <input
+                v-model="searchKeyword"
+                type="text"
                 placeholder="输入图书名称或关键词"
                 @keyup.enter="performSearch(1)"
               />
@@ -355,17 +255,17 @@ const formatNumber = (num) => num.toLocaleString()
           </table>
 
           <div v-if="searchTotalPages > 1" class="pagination">
-            <button 
-              class="page-btn" 
-              :disabled="searchPage === 1" 
+            <button
+              class="page-btn"
+              :disabled="searchPage === 1"
               @click="goToPage(searchPage - 1)"
             >
               上一页
             </button>
             <span class="page-info">第 {{ searchPage }} / {{ searchTotalPages }} 页</span>
-            <button 
-              class="page-btn" 
-              :disabled="searchPage === searchTotalPages" 
+            <button
+              class="page-btn"
+              :disabled="searchPage === searchTotalPages"
               @click="goToPage(searchPage + 1)"
             >
               下一页
@@ -373,178 +273,69 @@ const formatNumber = (num) => num.toLocaleString()
           </div>
         </div>
       </div>
-    </template>
+    </LoadingSpinner>
   </div>
 </template>
 
 <style scoped>
 .books {
-  max-width: 1280px;
-}
-
-.page-header {
-  margin-bottom: 28px;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.page-header h2 {
-  font-size: 26px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.02em;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.refresh-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #1e293b;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.refresh-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 80px;
-}
-
-.loading-spinner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  color: #94a3b8;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  max-width: var(--main-max-width);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 22px;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
   display: flex;
   align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  gap: var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
-  transition: all 0.25s ease;
+  transition: all var(--transition-base);
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
-.stat-icon svg {
-  width: 24px;
-  height: 24px;
+  border-color: var(--color-neutral-300);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   position: relative;
   z-index: 1;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
 }
 
 .stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  letter-spacing: var(--tracking-tight);
 }
 
 .stat-value .unit {
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-500);
 }
 
 .stat-glow {
@@ -553,42 +344,55 @@ const formatNumber = (num) => num.toLocaleString()
   right: -20px;
   width: 80px;
   height: 80px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 70%);
   border-radius: 50%;
+  transition: opacity var(--transition-base);
+}
+
+.stat-card:hover .stat-glow {
+  opacity: 1.5;
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  margin-bottom: 18px;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-4);
+  transition: box-shadow var(--transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-neutral-100);
 }
 
 .card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .title-icon {
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  flex-shrink: 0;
 }
 
 .title-icon svg {
@@ -603,20 +407,25 @@ const formatNumber = (num) => num.toLocaleString()
 
 .data-table th {
   text-align: left;
-  padding: 14px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  border-bottom: 2px solid #e2e8f0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-500);
+  border-bottom: 2px solid var(--color-neutral-200);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .data-table td {
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #334155;
-  border-bottom: 1px solid #f1f5f9;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-700);
+  border-bottom: 1px solid var(--color-neutral-100);
+  transition: background var(--transition-fast);
+}
+
+.data-table tbody tr:hover td {
+  background: var(--color-neutral-50);
 }
 
 .table-row {
@@ -636,53 +445,33 @@ const formatNumber = (num) => num.toLocaleString()
 }
 
 .category-tag {
-  font-size: 12px;
-  color: #10b981;
-  background: #ecfdf5;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-success-600);
+  background: var(--color-success-50);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
 }
 
 .count-cell {
-  font-weight: 700;
-  color: #6366f1;
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-600);
 }
 
 .count-cell .unit {
-  font-weight: 500;
-  color: #64748b;
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-500);
 }
 
 .name-cell {
-  font-weight: 600;
-  color: #0f172a;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
 }
 
 .id-cell {
-  font-weight: 600;
-  color: #6366f1;
-}
-
-.percent-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.percent-fill {
-  height: 8px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 4px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 4px;
-}
-
-.percent-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #6366f1;
-  min-width: 45px;
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-600);
 }
 
 .rank-badge {
@@ -691,111 +480,124 @@ const formatNumber = (num) => num.toLocaleString()
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
   color: #fff;
+  transition: transform var(--transition-fast);
+}
+
+.rank-badge:hover {
+  transform: scale(1.1);
 }
 
 .rank-1 {
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: var(--gradient-warm);
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
 .rank-2 {
-  background: linear-gradient(135deg, #94a3b8, #64748b);
+  background: linear-gradient(135deg, var(--color-neutral-400), var(--color-neutral-500));
   box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3);
 }
 
 .rank-3 {
-  background: linear-gradient(135deg, #d97706, #b45309);
+  background: linear-gradient(135deg, var(--color-warning-600), #92400e);
   box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
 }
 
 .rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10 {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-500);
 }
 
 .search-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  background: #f8fafc;
-  border-radius: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-neutral-100);
 }
 
 .search-inputs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .input-group label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-600);
 }
 
 .input-group input,
 .input-group select {
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #0f172a;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-0);
+  transition: all var(--transition-base);
+  font-family: var(--font-sans);
 }
 
 .input-group input:focus,
 .input-group select:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px var(--color-primary-50);
 }
 
 .input-group input::placeholder {
-  color: #94a3b8;
+  color: var(--color-neutral-400);
 }
 
 .search-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .search-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: var(--gradient-primary);
   border: none;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  color: var(--color-neutral-0);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-primary);
 }
 
 .search-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary-lg);
+}
+
+.search-btn:active {
+  transform: translateY(0);
 }
 
 .search-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .search-btn svg {
@@ -804,34 +606,39 @@ const formatNumber = (num) => num.toLocaleString()
 }
 
 .reset-btn {
-  padding: 10px 24px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  color: var(--color-neutral-600);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .reset-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--color-neutral-50);
+  border-color: var(--color-neutral-300);
+  color: var(--color-neutral-800);
+}
+
+.reset-btn:active {
+  transform: scale(0.97);
 }
 
 .search-results {
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .results-header {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .results-count {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
 }
 
 .no-results {
@@ -839,54 +646,59 @@ const formatNumber = (num) => num.toLocaleString()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: #94a3b8;
+  padding: var(--space-16) var(--space-5);
+  color: var(--color-neutral-400);
 }
 
 .no-results svg {
   width: 64px;
   height: 64px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   opacity: 0.5;
 }
 
 .no-results p {
-  font-size: 16px;
-  font-weight: 600;
-  color: #64748b;
-  margin: 0 0 8px 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-500);
+  margin: 0 0 var(--space-2) 0;
 }
 
 .no-results span {
-  font-size: 14px;
-  color: #94a3b8;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-400);
 }
 
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-neutral-200);
 }
 
 .page-btn {
-  padding: 8px 16px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 500;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-sm);
+  color: var(--color-neutral-600);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--color-neutral-50);
+  border-color: var(--color-neutral-300);
+  color: var(--color-neutral-800);
+}
+
+.page-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .page-btn:disabled {
@@ -895,8 +707,55 @@ const formatNumber = (num) => num.toLocaleString()
 }
 
 .page-info {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+
+  .search-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-actions {
+    flex-direction: column;
+  }
+
+  .search-btn,
+  .reset-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+  }
 }
 </style>

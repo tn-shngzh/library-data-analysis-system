@@ -839,14 +839,22 @@ def get_current_user(request: Request) -> str:
 async def borrow_book(request: Request):
     """借阅图书"""
     username = get_current_user(request)
-    body = await request.json()
-    book_id = body.get("book_id")
-    if not book_id:
-        raise HTTPException(status_code=400, detail="缺少图书 ID")
     
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+            
+            if role == 'admin':
+                raise HTTPException(status_code=403, detail="管理员账号无法借阅")
+            
+            body = await request.json()
+            book_id = body.get("book_id")
+            if not book_id:
+                raise HTTPException(status_code=400, detail="缺少图书 ID")
+            
             cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:
@@ -874,14 +882,22 @@ async def borrow_book(request: Request):
 async def return_book(request: Request):
     """归还图书"""
     username = get_current_user(request)
-    body = await request.json()
-    book_id = body.get("book_id")
-    if not book_id:
-        raise HTTPException(status_code=400, detail="缺少图书 ID")
     
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+            
+            if role == 'admin':
+                raise HTTPException(status_code=403, detail="管理员账号无法归还")
+            
+            body = await request.json()
+            book_id = body.get("book_id")
+            if not book_id:
+                raise HTTPException(status_code=400, detail="缺少图书 ID")
+            
             cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:
@@ -907,11 +923,18 @@ async def return_book(request: Request):
 
 @app.get("/api/borrows/my")
 async def get_my_borrows(request: Request):
-    """获取当前用户的借阅记录"""
+    """获取当前用户的借阅记录（admin 无法查看）"""
     username = get_current_user(request)
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+            
+            if role == 'admin':
+                return []
+            
             cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
             borrower = cur.fetchone()
             if not borrower:

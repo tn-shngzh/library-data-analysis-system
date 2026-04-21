@@ -1,5 +1,10 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { borrowApi } from '@/api/borrows'
+import { formatNumber } from '@/utils/format'
+import { BORROW_STAT_CARDS, ACTION_MAP, DEGREE_MAP } from '@/constants'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 const props = defineProps({
   preloadedData: {
@@ -24,24 +29,20 @@ const topBooks = ref([])
 const recentBorrows = ref([])
 const loading = ref(true)
 
+const statCards = BORROW_STAT_CARDS
+const actionMap = ACTION_MAP
+const degreeMap = DEGREE_MAP
+
 const fetchBorrowData = async () => {
   loading.value = true
   try {
-    const [statsRes, actionRes, degreeRes, topBorrowersRes, topBooksRes, recentRes] = await Promise.all([
-      fetch('/api/borrows/stats'),
-      fetch('/api/borrows/action-stats'),
-      fetch('/api/borrows/degree-stats'),
-      fetch('/api/borrows/top-borrowers'),
-      fetch('/api/borrows/top-books'),
-      fetch('/api/borrows/recent')
-    ])
-
-    if (statsRes.ok) borrowStats.value = await statsRes.json()
-    if (actionRes.ok) actionStats.value = await actionRes.json()
-    if (degreeRes.ok) degreeStats.value = await degreeRes.json()
-    if (topBorrowersRes.ok) topBorrowers.value = await topBorrowersRes.json()
-    if (topBooksRes.ok) topBooks.value = await topBooksRes.json()
-    if (recentRes.ok) recentBorrows.value = await recentRes.json()
+    const data = await borrowApi.getAll()
+    if (data.stats) borrowStats.value = data.stats
+    if (data.actionStats) actionStats.value = data.actionStats
+    if (data.degreeStats) degreeStats.value = data.degreeStats
+    if (data.topBorrowers) topBorrowers.value = data.topBorrowers
+    if (data.topBooks) topBooks.value = data.topBooks
+    if (data.recentBorrows) recentBorrows.value = data.recentBorrows
   } catch (e) {
     console.error('获取数据失败', e)
   } finally {
@@ -66,120 +67,18 @@ onMounted(() => {
     fetchBorrowData()
   }
 })
-
-const formatNumber = (num) => num.toLocaleString()
 </script>
 
 <template>
   <div class="borrows">
-    <div class="page-header">
-      <div class="header-content">
-        <div>
-          <h2>借阅管理</h2>
-          <p class="page-desc">借阅数据统计与分析</p>
-        </div>
-        <div class="header-actions">
-          <button class="refresh-btn" @click="fetchBorrowData" :disabled="loading">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'spinning': loading }">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            <span>刷新</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <PageHeader title="借阅管理" description="借阅数据统计与分析" :loading="loading" @refresh="fetchBorrowData" />
 
-    <div v-if="loading" class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <span>加载中...</span>
-      </div>
-    </div>
-    <template v-else>
+    <LoadingSpinner :loading="loading">
       <div class="stats-grid">
-        <div class="stat-card" style="--accent: #6366f1">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-          </div>
+        <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
           <div class="stat-info">
-            <span class="stat-label">总流通量</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.total_actions) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #8b5cf6">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5 12 12 5 19 12"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">借出</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.total_borrows) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #06b6d4">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <polyline points="19 12 12 19 5 12"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">归还</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.total_returns) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #10b981">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">续借</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.total_renewals) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #f59e0b">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">活跃借阅读者</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.active_borrowers) }}</span>
-          </div>
-          <div class="stat-glow"></div>
-        </div>
-
-        <div class="stat-card" style="--accent: #ef4444">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">被借阅图书</span>
-            <span class="stat-value">{{ formatNumber(borrowStats.borrowed_books) }}</span>
+            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-value">{{ formatNumber(borrowStats[card.key]) }}</span>
           </div>
           <div class="stat-glow"></div>
         </div>
@@ -359,178 +258,69 @@ const formatNumber = (num) => num.toLocaleString()
           </tbody>
         </table>
       </div>
-    </template>
+    </LoadingSpinner>
   </div>
 </template>
 
 <style scoped>
 .borrows {
-  max-width: 1280px;
-}
-
-.page-header {
-  margin-bottom: 28px;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.page-header h2 {
-  font-size: 26px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.02em;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.refresh-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #1e293b;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.refresh-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 80px;
-}
-
-.loading-spinner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  color: #94a3b8;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  max-width: var(--main-max-width);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 22px;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
   display: flex;
   align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  gap: var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
-  transition: all 0.25s ease;
+  transition: all var(--transition-base);
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
-.stat-icon svg {
-  width: 24px;
-  height: 24px;
+  border-color: var(--color-neutral-300);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   position: relative;
   z-index: 1;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
 }
 
 .stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  letter-spacing: var(--tracking-tight);
 }
 
 .stat-value .unit {
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-500);
 }
 
 .stat-glow {
@@ -539,42 +329,55 @@ const formatNumber = (num) => num.toLocaleString()
   right: -20px;
   width: 80px;
   height: 80px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 70%);
   border-radius: 50%;
+  transition: opacity var(--transition-base);
+}
+
+.stat-card:hover .stat-glow {
+  opacity: 1.5;
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  margin-bottom: 18px;
+  background: var(--color-neutral-0);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-4);
+  transition: box-shadow var(--transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-neutral-100);
 }
 
 .card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .title-icon {
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  flex-shrink: 0;
 }
 
 .title-icon svg {
@@ -589,20 +392,25 @@ const formatNumber = (num) => num.toLocaleString()
 
 .data-table th {
   text-align: left;
-  padding: 14px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  border-bottom: 2px solid #e2e8f0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-500);
+  border-bottom: 2px solid var(--color-neutral-200);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .data-table td {
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #334155;
-  border-bottom: 1px solid #f1f5f9;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-neutral-700);
+  border-bottom: 1px solid var(--color-neutral-100);
+  transition: background var(--transition-fast);
+}
+
+.data-table tbody tr:hover td {
+  background: var(--color-neutral-50);
 }
 
 .table-row {
@@ -622,61 +430,60 @@ const formatNumber = (num) => num.toLocaleString()
 }
 
 .type-tag {
-  font-size: 12px;
-  color: #6366f1;
-  background: #eef2ff;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
 }
 
 .category-tag {
-  font-size: 12px;
-  color: #10b981;
-  background: #ecfdf5;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--color-success-600);
+  background: var(--color-success-50);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
 }
 
 .count-cell {
-  font-weight: 700;
-  color: #6366f1;
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-600);
 }
 
 .count-cell .unit {
-  font-weight: 500;
-  color: #64748b;
+  font-weight: var(--font-medium);
+  color: var(--color-neutral-500);
 }
 
 .id-cell {
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.name-cell {
-  font-weight: 500;
-  color: #334155;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
 }
 
 .percent-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .percent-fill {
-  height: 8px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 4px;
+  height: 6px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-full);
   transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 4px;
+  flex: 1;
+  max-width: 120px;
 }
 
 .percent-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #6366f1;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-500);
   min-width: 45px;
 }
 
@@ -686,30 +493,74 @@ const formatNumber = (num) => num.toLocaleString()
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
   color: #fff;
+  transition: transform var(--transition-fast);
+}
+
+.rank-badge:hover {
+  transform: scale(1.1);
 }
 
 .rank-1 {
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: var(--gradient-warm);
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
 .rank-2 {
-  background: linear-gradient(135deg, #94a3b8, #64748b);
+  background: linear-gradient(135deg, var(--color-neutral-400), var(--color-neutral-500));
   box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3);
 }
 
 .rank-3 {
-  background: linear-gradient(135deg, #d97706, #b45309);
+  background: linear-gradient(135deg, var(--color-warning-600), #92400e);
   box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
 }
 
 .rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10,
 .rank-11, .rank-12, .rank-13, .rank-14, .rank-15 {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-500);
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .percent-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .percent-fill {
+    max-width: 100%;
+  }
 }
 </style>
