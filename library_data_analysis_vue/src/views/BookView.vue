@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import CategoryList from '@/components/CategoryList.vue'
 
 const props = defineProps({
-  preloadedData: {
+  allData: {
     type: Object,
     default: null
   }
@@ -96,7 +96,7 @@ const goToPage = (page) => {
   }
 }
 
-watch(() => props.preloadedData, (data) => {
+watch(() => props.allData?.books, (data) => {
   if (data && data.stats) {
     bookStats.value = data.stats
     categories.value = data.categories || []
@@ -106,7 +106,7 @@ watch(() => props.preloadedData, (data) => {
 }, { immediate: true })
 
 onMounted(() => {
-  if (!props.preloadedData || !props.preloadedData.stats) {
+  if (!props.allData?.books || !props.allData.books.stats) {
     fetchBookData()
   }
   fetchCategoriesList()

@@ -7,7 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
 
 const props = defineProps({
-  preloadedData: {
+  allData: {
     type: Object,
     default: null
   }
@@ -50,7 +50,7 @@ const fetchBorrowData = async () => {
   }
 }
 
-watch(() => props.preloadedData, (data) => {
+watch(() => props.allData?.borrows, (data) => {
   if (data && data.stats) {
     borrowStats.value = data.stats
     actionStats.value = data.actionStats || []
@@ -63,7 +63,7 @@ watch(() => props.preloadedData, (data) => {
 }, { immediate: true })
 
 onMounted(() => {
-  if (!props.preloadedData || !props.preloadedData.stats) {
+  if (!props.allData?.borrows || !props.allData.borrows.stats) {
     fetchBorrowData()
   }
 })

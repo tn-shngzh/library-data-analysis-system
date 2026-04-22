@@ -1,0 +1,349 @@
+from fastapi import APIRouter, HTTPException, Request
+from datetime import datetime
+from app.database import get_db_connection
+from app.config import education_levels
+from app.auth import get_current_user
+
+router = APIRouter(prefix="/api/borrows", tags=["借阅分析"])
+
+
+@router.get("/stats")
+async def get_borrow_stats():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM circulations")
+            total_actions = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKO'")
+            total_borrows = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKI'")
+            total_returns = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action IN ('REH', 'REI')")
+            total_renewals = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(DISTINCT borrower_id) FROM circulations WHERE action = 'CKO'")
+            active_borrowers = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE action = 'CKO'")
+            borrowed_books = cur.fetchone()[0]
+
+            return {
+                "total_actions": total_actions,
+                "total_borrows": total_borrows,
+                "total_returns": total_returns,
+                "total_renewals": total_renewals,
+                "active_borrowers": active_borrowers,
+                "borrowed_books": borrowed_books
+            }
+    finally:
+        conn.close()
+
+
+@router.get("/action-stats")
+async def get_action_stats():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT action, count FROM mv_action_stats ORDER BY count DESC")
+                rows = cur.fetchall()
+            except Exception:
+                cur.execute("SELECT action, COUNT(*) as count FROM circulations GROUP BY action ORDER BY count DESC")
+                rows = cur.fetchall()
+            total = sum(r[1] for r in rows)
+            action_names = {'CKO': '借出', 'CKI': '归还', 'REH': '到馆续借', 'REI': '网上续借'}
+            return [
+                {
+                    "action": r[0],
+                    "name": action_names.get(r[0], r[0]),
+                    "count": r[1],
+                    "percent": round(r[1] / total * 100, 1) if total else 0
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+@router.get("/degree-stats")
+async def get_degree_stats():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT degree, degree_name, count FROM mv_degree_borrow_stats ORDER BY count DESC")
+                rows = cur.fetchall()
+            except Exception:
+                cur.execute("""
+                    SELECT b.degree, el.name, COUNT(*) as count
+                    FROM circulations c
+                    JOIN borrowers b ON c.borrower_id = b.id
+                    JOIN education_levels el ON b.degree = el.code
+                    GROUP BY b.degree, el.name
+                    ORDER BY count DESC
+                """)
+                rows = cur.fetchall()
+            total = sum(r[2] for r in rows)
+            return [
+                {
+                    "code": r[0],
+                    "name": r[1],
+                    "count": r[2],
+                    "percent": round(r[2] / total * 100, 1) if total else 0
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+@router.get("/daily-trend")
+async def get_daily_trend():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT action_date, count FROM mv_daily_borrow_trend")
+                rows = cur.fetchall()
+            except Exception:
+                cur.execute("""
+                    SELECT action_date, COUNT(*) as count
+                    FROM circulations
+                    GROUP BY action_date
+                    ORDER BY action_date
+                """)
+                rows = cur.fetchall()
+            return [
+                {"date": str(r[0]), "count": r[1]}
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+@router.get("/top-borrowers")
+async def get_top_borrowers():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT borrower_id, degree, borrow_count FROM mv_top_borrowers LIMIT 15")
+                rows = cur.fetchall()
+            except Exception:
+                cur.execute("""
+                    SELECT c.borrower_id, b.degree, COUNT(*) as borrow_count
+                    FROM circulations c
+                    JOIN borrowers b ON c.borrower_id = b.id
+                    WHERE c.action = 'CKO'
+                    GROUP BY c.borrower_id, b.degree
+                    ORDER BY borrow_count DESC
+                    LIMIT 15
+                """)
+                rows = cur.fetchall()
+            return [
+                {
+                    "rank": i + 1,
+                    "borrower_id": r[0],
+                    "degree": education_levels.get(r[1], r[1]),
+                    "borrow_count": r[2]
+                }
+                for i, r in enumerate(rows)
+            ]
+    finally:
+        conn.close()
+
+
+@router.get("/top-books")
+async def get_top_borrowed_books():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT bib_id, category, borrow_count FROM mv_top_books LIMIT 15")
+                rows = cur.fetchall()
+            except Exception:
+                cur.execute("""
+                    SELECT c.bib_id, bc.category, COUNT(*) as borrow_count
+                    FROM circulations c
+                    LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
+                    WHERE c.action = 'CKO'
+                    GROUP BY c.bib_id, bc.category
+                    ORDER BY borrow_count DESC
+                    LIMIT 15
+                """)
+                rows = cur.fetchall()
+            return [
+                {
+                    "rank": i + 1,
+                    "bib_id": r[0],
+                    "category": r[1] if r[1] else '未知',
+                    "borrow_count": r[2]
+                }
+                for i, r in enumerate(rows)
+            ]
+    finally:
+        conn.close()
+
+
+@router.get("/recent")
+async def get_recent_borrows():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.action_date, c.action_time, c.borrower_id, c.bib_id,
+                       c.action, b.degree, bc.category, bc.name
+                FROM circulations c
+                JOIN borrowers b ON c.borrower_id = b.id
+                LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
+                WHERE c.action = 'CKO'
+                ORDER BY c.action_date DESC, c.action_time DESC
+                LIMIT 20
+            """)
+            rows = cur.fetchall()
+            return [
+                {
+                    "date": str(r[0]),
+                    "time": str(r[1]) if r[1] else '',
+                    "borrower_id": r[2],
+                    "bib_id": r[3],
+                    "action": r[4],
+                    "degree": education_levels.get(r[5], r[5]),
+                    "category": r[6] if r[6] else '未知',
+                    "title": r[7] if r[7] else '未知'
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
+@router.post("/borrow")
+async def borrow_book(request: Request):
+    username = get_current_user(request)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+
+            if role == 'admin':
+                raise HTTPException(status_code=403, detail="管理员账号无法借阅")
+
+            body = await request.json()
+            book_id = body.get("book_id")
+            if not book_id:
+                raise HTTPException(status_code=400, detail="缺少图书 ID")
+
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="读者不存在")
+
+            borrower_id = borrower[0]
+            action_date = datetime.now().date()
+            action_time = datetime.now().time()
+
+            cur.execute("""
+                INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
+                VALUES (%s, %s, 'CKO', %s, %s)
+                RETURNING id
+            """, (book_id, borrower_id, action_date, action_time))
+
+            circ_id = cur.fetchone()[0]
+            conn.commit()
+
+            return {"success": True, "circulation_id": circ_id}
+    finally:
+        conn.close()
+
+
+@router.post("/return")
+async def return_book(request: Request):
+    username = get_current_user(request)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+
+            if role == 'admin':
+                raise HTTPException(status_code=403, detail="管理员账号无法归还")
+
+            body = await request.json()
+            book_id = body.get("book_id")
+            if not book_id:
+                raise HTTPException(status_code=400, detail="缺少图书 ID")
+
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="读者不存在")
+
+            borrower_id = borrower[0]
+            action_date = datetime.now().date()
+            action_time = datetime.now().time()
+
+            cur.execute("""
+                INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
+                VALUES (%s, %s, 'REH', %s, %s)
+                RETURNING id
+            """, (book_id, borrower_id, action_date, action_time))
+
+            circ_id = cur.fetchone()[0]
+            conn.commit()
+
+            return {"success": True, "circulation_id": circ_id}
+    finally:
+        conn.close()
+
+
+@router.get("/my")
+async def get_my_borrows(request: Request):
+    username = get_current_user(request)
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            user = cur.fetchone()
+            role = user[0] if user else 'user'
+
+            if role == 'admin':
+                return []
+
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
+            borrower = cur.fetchone()
+            if not borrower:
+                return []
+
+            borrower_id = borrower[0]
+            cur.execute("""
+                SELECT c.bib_id, bc.name, bc.category, c.action, c.action_date, c.action_time
+                FROM circulations c
+                LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
+                WHERE c.borrower_id = %s
+                ORDER BY c.action_date DESC, c.action_time DESC
+                LIMIT 50
+            """, (borrower_id,))
+            rows = cur.fetchall()
+            return [
+                {
+                    "bib_id": r[0],
+                    "title": r[1] if r[1] else '未知',
+                    "category": r[2] if r[2] else '未知',
+                    "action": r[3],
+                    "action_name": '借出' if r[3] == 'CKO' else '归还' if r[3] == 'REH' else r[3],
+                    "date": str(r[4]),
+                    "time": str(r[5]) if r[5] else ''
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()

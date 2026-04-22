@@ -8,6 +8,7 @@ export const borrowApi = {
   getTopBooks: () => get('/api/borrows/top-books'),
   getRecent: () => get('/api/borrows/recent'),
   getMy: () => get('/api/borrows/my'),
+  getDailyTrend: () => get('/api/borrows/daily-trend'),
 
   getAll: async () => {
     const [statsRes, actionRes, degreeRes, topBorrowersRes, topBooksRes, recentRes] = await Promise.all([

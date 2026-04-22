@@ -7,7 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
 
 const props = defineProps({
-  preloadedData: {
+  allData: {
     type: Object,
     default: null
   }
@@ -40,7 +40,7 @@ const fetchReaderData = async () => {
   }
 }
 
-watch(() => props.preloadedData, (data) => {
+watch(() => props.allData?.readers, (data) => {
   if (data && data.stats) {
     readerStats.value = data.stats
     readerTypes.value = data.readerTypes || []
@@ -51,7 +51,7 @@ watch(() => props.preloadedData, (data) => {
 }, { immediate: true })
 
 onMounted(() => {
-  if (!props.preloadedData || !props.preloadedData.stats) {
+  if (!props.allData?.readers || !props.allData.readers.stats) {
     fetchReaderData()
   }
 })
