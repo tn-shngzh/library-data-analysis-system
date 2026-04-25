@@ -12,6 +12,22 @@ async def get_borrow_stats():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute("""
+                SELECT total_actions, total_borrows, total_returns,
+                       total_renewals, active_borrowers, borrowed_books
+                FROM mv_borrow_stats
+            """)
+            row = cur.fetchone()
+            if row:
+                return {
+                    "total_actions": row[0],
+                    "total_borrows": row[1],
+                    "total_returns": row[2],
+                    "total_renewals": row[3],
+                    "active_borrowers": row[4],
+                    "borrowed_books": row[5]
+                }
+
             cur.execute("SELECT COUNT(*) FROM circulations")
             total_actions = cur.fetchone()[0]
 
@@ -55,15 +71,18 @@ async def get_action_stats():
                 rows = cur.fetchall()
             total = sum(r[1] for r in rows)
             action_names = {'CKO': '借出', 'CKI': '归还', 'REH': '到馆续借', 'REI': '网上续借'}
-            return [
-                {
+            result = []
+            for i, r in enumerate(rows):
+                pct = round(r[1] / total * 100, 1) if total else 0
+                if i == len(rows) - 1:
+                    pct = round(100.0 - sum(round(rr[1] / total * 100, 1) for rr in rows[:-1]), 1)
+                result.append({
                     "action": r[0],
                     "name": action_names.get(r[0], r[0]),
                     "count": r[1],
-                    "percent": round(r[1] / total * 100, 1) if total else 0
-                }
-                for r in rows
-            ]
+                    "percent": pct
+                })
+            return result
     finally:
         conn.close()
 
@@ -87,15 +106,18 @@ async def get_degree_stats():
                 """)
                 rows = cur.fetchall()
             total = sum(r[2] for r in rows)
-            return [
-                {
+            result = []
+            for i, r in enumerate(rows):
+                pct = round(r[2] / total * 100, 1) if total else 0
+                if i == len(rows) - 1:
+                    pct = round(100.0 - sum(round(rr[2] / total * 100, 1) for rr in rows[:-1]), 1)
+                result.append({
                     "code": r[0],
                     "name": r[1],
                     "count": r[2],
-                    "percent": round(r[2] / total * 100, 1) if total else 0
-                }
-                for r in rows
-            ]
+                    "percent": pct
+                })
+            return result
     finally:
         conn.close()
 
@@ -161,26 +183,21 @@ async def get_top_borrowed_books():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            try:
-                cur.execute("SELECT bib_id, category, borrow_count FROM mv_top_books LIMIT 15")
-                rows = cur.fetchall()
-            except Exception:
-                cur.execute("""
-                    SELECT c.bib_id, bc.category, COUNT(*) as borrow_count
-                    FROM circulations c
-                    LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
-                    WHERE c.action = 'CKO'
-                    GROUP BY c.bib_id, bc.category
-                    ORDER BY borrow_count DESC
-                    LIMIT 15
-                """)
-                rows = cur.fetchall()
+            cur.execute("""
+                SELECT t.bib_id, t.category, t.borrow_count, bc.name
+                FROM mv_top_books t
+                LEFT JOIN book_categories bc ON t.bib_id = bc.bib_id
+                ORDER BY t.borrow_count DESC
+                LIMIT 15
+            """)
+            rows = cur.fetchall()
             return [
                 {
                     "rank": i + 1,
                     "bib_id": r[0],
                     "category": r[1] if r[1] else '未知',
-                    "borrow_count": r[2]
+                    "borrow_count": r[2],
+                    "name": r[3] if r[3] else '未知'
                 }
                 for i, r in enumerate(rows)
             ]

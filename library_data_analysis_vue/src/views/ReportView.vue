@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -25,10 +28,10 @@ const bookStats = computed(() => props.allData?.books?.stats || {})
 const borrowStats = computed(() => props.allData?.borrows?.stats || {})
 
 const reportTypes = [
-  { id: 'overview', label: '综合概览', icon: 'layout', desc: '包含所有模块的关键指标汇总' },
-  { id: 'reader', label: '读者报告', icon: 'users', desc: '读者活跃度、类型分布等详细分析' },
-  { id: 'book', label: '图书报告', icon: 'book', desc: '馆藏图书分类、热门图书等统计' },
-  { id: 'borrow', label: '借阅报告', icon: 'activity', desc: '借阅趋势、操作类型等分析' }
+  { id: 'overview', i18nKey: 'report.typeOverview', icon: 'layout', i18nDesc: 'report.typeOverviewDesc' },
+  { id: 'reader', i18nKey: 'report.typeReader', icon: 'users', i18nDesc: 'report.typeReaderDesc' },
+  { id: 'book', i18nKey: 'report.typeBook', icon: 'book', i18nDesc: 'report.typeBookDesc' },
+  { id: 'borrow', i18nKey: 'report.typeBorrow', icon: 'activity', i18nDesc: 'report.typeBorrowDesc' }
 ]
 
 const generateReport = () => {
@@ -40,58 +43,58 @@ const generateReport = () => {
     const bws = borrowStats.value
 
     generatedReport.value = {
-      title: activeReport.value === 'overview' ? '图书馆数据分析综合报告' :
-             activeReport.value === 'reader' ? '读者分析报告' :
-             activeReport.value === 'book' ? '图书分析报告' : '借阅分析报告',
+      title: activeReport.value === 'overview' ? t('report.comprehensiveReport') :
+             activeReport.value === 'reader' ? t('report.readerReport') :
+             activeReport.value === 'book' ? t('report.bookReport') : t('report.borrowReport'),
       date: new Date().toLocaleDateString('zh-CN'),
-      period: reportPeriod.value === 'month' ? '月度' : reportPeriod.value === 'quarter' ? '季度' : '年度',
+      period: reportPeriod.value === 'month' ? t('report.monthly') : reportPeriod.value === 'quarter' ? t('report.quarterly') : t('report.yearly'),
       sections: activeReport.value === 'overview' ? [
         {
-          title: '核心指标',
+          title: t('report.coreIndicators'),
           items: [
-            { label: '总流通量', value: formatNumber(s.total_borrows || 0) },
-            { label: '注册读者', value: formatNumber(s.total_readers || 0) },
-            { label: '活跃读者', value: formatNumber(s.active_readers || 0) },
-            { label: '馆藏图书', value: formatNumber(s.total_books || 0) }
+            { label: t('report.totalCirculation'), value: formatNumber(s.total_borrows || 0) },
+            { label: t('report.registeredReaders'), value: formatNumber(s.total_readers || 0) },
+            { label: t('report.activeReaders'), value: formatNumber(s.active_readers || 0) },
+            { label: t('report.collectionBooks'), value: formatNumber(s.total_books || 0) }
           ]
         },
         {
-          title: '借阅统计',
+          title: t('report.borrowStatistics'),
           items: [
-            { label: '借出量', value: formatNumber(s.cko_count || 0) },
-            { label: '归还量', value: formatNumber(s.cki_count || 0) },
-            { label: '到馆续借', value: formatNumber(s.reh_count || 0) },
-            { label: '网上续借', value: formatNumber(s.rei_count || 0) }
+            { label: t('report.checkoutCount'), value: formatNumber(s.cko_count || 0) },
+            { label: t('report.checkinCount'), value: formatNumber(s.cki_count || 0) },
+            { label: t('report.onSiteRenewal'), value: formatNumber(s.reh_count || 0) },
+            { label: t('report.onlineRenewal'), value: formatNumber(s.rei_count || 0) }
           ]
         }
       ] : activeReport.value === 'reader' ? [
         {
-          title: '读者概览',
+          title: t('report.readerOverview'),
           items: [
-            { label: '读者总数', value: formatNumber(rs.total_readers || 0) },
-            { label: '月活跃', value: formatNumber(rs.month_active || 0) },
-            { label: '月新增', value: formatNumber(rs.month_new || 0) },
-            { label: '人均借阅', value: (rs.avg_borrows || 0) + ' 次' }
+            { label: t('report.totalReaders'), value: formatNumber(rs.total_readers || 0) },
+            { label: t('report.monthlyActive'), value: formatNumber(rs.month_active || 0) },
+            { label: t('report.monthlyNew'), value: formatNumber(rs.month_new || 0) },
+            { label: t('report.avgBorrows'), value: (rs.avg_borrows || 0) + ' ' + t('common.times') }
           ]
         }
       ] : activeReport.value === 'book' ? [
         {
-          title: '图书概览',
+          title: t('report.bookOverview'),
           items: [
-            { label: '馆藏总量', value: formatNumber(bs.total_items || 0) },
-            { label: '本月新增', value: formatNumber(bs.month_items || 0) },
-            { label: '借阅率', value: (bs.borrow_rate || 0) + '%' },
-            { label: '零借阅', value: formatNumber(bs.zero_borrow || 0) }
+            { label: t('report.totalCollection'), value: formatNumber(bs.total_items || 0) },
+            { label: t('report.monthlyNew'), value: formatNumber(bs.month_items || 0) },
+            { label: t('report.borrowRate'), value: (bs.borrow_rate || 0) + '%' },
+            { label: t('report.zeroBorrow'), value: formatNumber(bs.zero_borrow || 0) }
           ]
         }
       ] : [
         {
-          title: '借阅概览',
+          title: t('report.borrowOverview'),
           items: [
-            { label: '总操作数', value: formatNumber(bws.total_actions || 0) },
-            { label: '借出总量', value: formatNumber(bws.total_borrows || 0) },
-            { label: '归还总量', value: formatNumber(bws.total_returns || 0) },
-            { label: '续借总量', value: formatNumber(bws.total_renewals || 0) }
+            { label: t('report.totalActions'), value: formatNumber(bws.total_actions || 0) },
+            { label: t('report.totalCheckouts'), value: formatNumber(bws.total_borrows || 0) },
+            { label: t('report.totalReturns'), value: formatNumber(bws.total_returns || 0) },
+            { label: t('report.totalRenewals'), value: formatNumber(bws.total_renewals || 0) }
           ]
         }
       ]
@@ -104,8 +107,8 @@ const exportReport = (format) => {
   if (!generatedReport.value) return
   const report = generatedReport.value
   let content = `${report.title}\n`
-  content += `报告日期: ${report.date}\n`
-  content += `统计周期: ${report.period}\n\n`
+  content += `${t('report.reportDate')}: ${report.date}\n`
+  content += `${t('report.statisticsPeriod')}: ${report.period}\n\n`
   report.sections.forEach(section => {
     content += `【${section.title}】\n`
     section.items.forEach(item => {
@@ -123,7 +126,7 @@ const exportReport = (format) => {
     a.click()
     URL.revokeObjectURL(url)
   } else if (format === 'csv') {
-    let csv = '分类,指标,数值\n'
+    let csv = `${t('report.csvCategory')},${t('report.csvMetric')},${t('report.csvValue')}\n`
     report.sections.forEach(section => {
       section.items.forEach(item => {
         csv += `${section.title},${item.label},${item.value}\n`
@@ -152,20 +155,20 @@ onMounted(() => {
   <div class="report-view">
     <div class="page-header">
       <div class="header-info">
-        <h1>数据报表</h1>
-        <p>生成和导出各类数据分析报告</p>
+        <h1>{{ t('report.title') }}</h1>
+        <p>{{ t('report.desc') }}</p>
       </div>
     </div>
 
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <span>正在加载数据...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <template v-else>
       <div class="report-config">
         <div class="config-section">
-          <h3>选择报告类型</h3>
+          <h3>{{ t('report.selectReportType') }}</h3>
           <div class="report-types">
             <div
               v-for="rt in reportTypes"
@@ -196,8 +199,8 @@ onMounted(() => {
                 </svg>
               </div>
               <div class="rt-info">
-                <span class="rt-label">{{ rt.label }}</span>
-                <span class="rt-desc">{{ rt.desc }}</span>
+                <span class="rt-label">{{ t(rt.i18nKey) }}</span>
+                <span class="rt-desc">{{ t(rt.i18nDesc) }}</span>
               </div>
               <div class="rt-check" v-if="activeReport === rt.id">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -209,11 +212,11 @@ onMounted(() => {
         </div>
 
         <div class="config-section">
-          <h3>统计周期</h3>
+          <h3>{{ t('report.statisticsPeriod') }}</h3>
           <div class="period-options">
-            <button class="period-btn" :class="{ active: reportPeriod === 'month' }" @click="reportPeriod = 'month'">月度</button>
-            <button class="period-btn" :class="{ active: reportPeriod === 'quarter' }" @click="reportPeriod = 'quarter'">季度</button>
-            <button class="period-btn" :class="{ active: reportPeriod === 'year' }" @click="reportPeriod = 'year'">年度</button>
+            <button class="period-btn" :class="{ active: reportPeriod === 'month' }" @click="reportPeriod = 'month'">{{ t('report.monthly') }}</button>
+            <button class="period-btn" :class="{ active: reportPeriod === 'quarter' }" @click="reportPeriod = 'quarter'">{{ t('report.quarterly') }}</button>
+            <button class="period-btn" :class="{ active: reportPeriod === 'year' }" @click="reportPeriod = 'year'">{{ t('report.yearly') }}</button>
           </div>
         </div>
 
@@ -226,7 +229,7 @@ onMounted(() => {
             <polyline points="10 9 9 9 8 9"/>
           </svg>
           <div v-else class="btn-spinner"></div>
-          <span>{{ generating ? '生成中...' : '生成报告' }}</span>
+          <span>{{ generating ? t('report.generating') : t('report.generateReport') }}</span>
         </button>
       </div>
 
@@ -235,8 +238,8 @@ onMounted(() => {
           <div>
             <h2>{{ generatedReport.title }}</h2>
             <div class="preview-meta">
-              <span>报告日期: {{ generatedReport.date }}</span>
-              <span>统计周期: {{ generatedReport.period }}</span>
+              <span>{{ t('report.reportDate') }}: {{ generatedReport.date }}</span>
+              <span>{{ t('report.statisticsPeriod') }}: {{ generatedReport.period }}</span>
             </div>
           </div>
           <div class="export-actions">
@@ -246,7 +249,7 @@ onMounted(() => {
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              <span>导出 CSV</span>
+              <span>{{ t('report.exportCSV') }}</span>
             </button>
             <button class="export-btn" @click="exportReport('txt')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -254,7 +257,7 @@ onMounted(() => {
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              <span>导出 TXT</span>
+              <span>{{ t('report.exportTXT') }}</span>
             </button>
           </div>
         </div>
@@ -280,8 +283,8 @@ onMounted(() => {
           <line x1="16" y1="17" x2="8" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
         </svg>
-        <h3>尚未生成报告</h3>
-        <p>请选择报告类型和统计周期，然后点击"生成报告"</p>
+        <h3>{{ t('report.noReportTitle') }}</h3>
+        <p>{{ t('report.noReportDesc') }}</p>
       </div>
     </template>
   </div>

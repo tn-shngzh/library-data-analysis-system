@@ -19,19 +19,49 @@ const router = createRouter({
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: DashboardView
+      component: DashboardView,
+      meta: { requiresAuth: true, role: 'admin' }
     },
     {
       path: '/library',
       name: 'library',
-      component: LibraryView
+      component: LibraryView,
+      meta: { requiresAuth: true, role: 'user' }
     },
     {
       path: '/settings',
       name: 'settings',
-      component: SettingsView
+      component: SettingsView,
+      meta: { requiresAuth: true }
     }
   ]
+})
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  const role = localStorage.getItem('role')
+
+  if (to.meta.requiresAuth && !token) {
+    next('/login')
+    return
+  }
+
+  if (to.path === '/dashboard' && role !== 'admin') {
+    next('/library')
+    return
+  }
+
+  if (to.path === '/library' && role === 'admin') {
+    next('/dashboard')
+    return
+  }
+
+  if (to.path === '/settings' && role === 'admin') {
+    next('/dashboard')
+    return
+  }
+
+  next()
 })
 
 export default router

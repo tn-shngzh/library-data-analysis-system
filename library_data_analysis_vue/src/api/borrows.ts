@@ -11,22 +11,23 @@ export const borrowApi = {
   getDailyTrend: () => get('/api/borrows/daily-trend'),
 
   getAll: async () => {
-    const [statsRes, actionRes, degreeRes, topBorrowersRes, topBooksRes, recentRes] = await Promise.all([
-      borrowApi.getStats(),
-      borrowApi.getActionStats(),
-      borrowApi.getDegreeStats(),
-      borrowApi.getTopBorrowers(),
-      borrowApi.getTopBooks(),
-      borrowApi.getRecent()
-    ])
-
     const result = {}
-    if (statsRes.ok) result.stats = await statsRes.json()
-    if (actionRes.ok) result.actionStats = await actionRes.json()
-    if (degreeRes.ok) result.degreeStats = await degreeRes.json()
-    if (topBorrowersRes.ok) result.topBorrowers = await topBorrowersRes.json()
-    if (topBooksRes.ok) result.topBooks = await topBooksRes.json()
-    if (recentRes.ok) result.recentBorrows = await recentRes.json()
+    const calls = [
+      ['stats', borrowApi.getStats],
+      ['actionStats', borrowApi.getActionStats],
+      ['degreeStats', borrowApi.getDegreeStats],
+      ['topBorrowers', borrowApi.getTopBorrowers],
+      ['topBooks', borrowApi.getTopBooks],
+      ['recentBorrows', borrowApi.getRecent]
+    ]
+    const responses = await Promise.allSettled(calls.map(([, fn]) => fn()))
+    for (let i = 0; i < calls.length; i++) {
+      const [key] = calls[i]
+      const res = responses[i]
+      if (res.status === 'fulfilled' && res.value.ok) {
+        result[key] = await res.value.json()
+      }
+    }
     return result
   }
 }

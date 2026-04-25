@@ -1,11 +1,13 @@
 <script setup>
-import { ref, onMounted, reactive, computed, watch, nextTick, defineAsyncComponent, shallowRef } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, computed, watch, nextTick, defineAsyncComponent, shallowRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { overviewApi } from '@/api/overview'
 import { readerApi } from '@/api/readers'
 import { bookApi } from '@/api/books'
 import { borrowApi } from '@/api/borrows'
 import { useAuth } from '@/composables/useAuth'
 import { useTime } from '@/composables/useTime'
+import { useDropdown } from '@/composables/useDropdown'
 import { getCache, setCache } from '@/utils/cache'
 import OverviewView from './OverviewView.vue'
 import CategoryView from './CategoryView.vue'
@@ -17,8 +19,13 @@ import PredictView from './PredictView.vue'
 import ReportView from './ReportView.vue'
 import SettingsView from './SettingsView.vue'
 
+const { t } = useI18n()
 const { username, role, checkAuth, logout } = useAuth()
 const { currentTime } = useTime()
+const { showDropdown: showUserDropdown, dropdownRef: userMenuRef, toggleDropdown: toggleUserDropdown } = useDropdown()
+
+const userDropdownPos = reactive({ top: 0, right: 0 })
+const settingsActiveMenu = ref('profile')
 
 const dataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
@@ -29,15 +36,15 @@ const contextMenuTarget = ref(null)
 const dragState = reactive({ dragging: false, dragIndex: -1, dropIndex: -1 })
 
 const navItems = ref([
-  { id: 'overview', label: '数据总览', icon: 'grid', pinned: true, closable: false, loaded: false },
-  { id: 'category', label: '分类分析', icon: 'book', pinned: false, closable: true, loaded: false },
-  { id: 'borrow', label: '借阅分析', icon: 'book-open', pinned: false, closable: true, loaded: false },
-  { id: 'reader', label: '用户分析', icon: 'users', pinned: false, closable: true, loaded: false },
-  { id: 'trend', label: '趋势分析', icon: 'trending-up', pinned: false, closable: true, loaded: false },
-  { id: 'book', label: '图书分析', icon: 'book-plus', pinned: false, closable: true, loaded: false },
-  { id: 'predict', label: '预测中心', icon: 'clock', pinned: false, closable: true, loaded: false },
-  { id: 'report', label: '数据报表', icon: 'file-text', pinned: false, closable: true, loaded: false },
-  { id: 'settings', label: '系统管理', icon: 'settings', pinned: false, closable: true, loaded: false }
+  { id: 'overview', i18nKey: 'nav.overview', icon: 'grid', pinned: true, closable: false, loaded: false },
+  { id: 'category', i18nKey: 'nav.category', icon: 'book', pinned: false, closable: true, loaded: false },
+  { id: 'borrow', i18nKey: 'nav.borrow', icon: 'book-open', pinned: false, closable: true, loaded: false },
+  { id: 'reader', i18nKey: 'nav.reader', icon: 'users', pinned: false, closable: true, loaded: false },
+  { id: 'trend', i18nKey: 'nav.trend', icon: 'trending-up', pinned: false, closable: true, loaded: false },
+  { id: 'book', i18nKey: 'nav.book', icon: 'book-plus', pinned: false, closable: true, loaded: false },
+  { id: 'predict', i18nKey: 'nav.predict', icon: 'clock', pinned: false, closable: true, loaded: false },
+  { id: 'report', i18nKey: 'nav.report', icon: 'file-text', pinned: false, closable: true, loaded: false },
+  { id: 'settings', i18nKey: 'nav.settings', icon: 'settings', pinned: false, closable: true, loaded: false }
 ])
 
 const MAX_VISIBLE_TABS = 7
@@ -51,6 +58,31 @@ const overflowItems = computed(() => {
   return navItems.value.slice(MAX_VISIBLE_TABS)
 })
 const overflowMenuVisible = ref(false)
+
+const settingsMenuItems = computed(() => [
+  { id: 'profile', i18nKey: 'settings.profile', icon: 'user', desc: t('settings.profileDesc') },
+  { id: 'password', i18nKey: 'settings.password', icon: 'lock', desc: t('settings.passwordDesc') },
+  { id: 'security', i18nKey: 'settings.security', icon: 'shield', desc: t('settings.securityDesc') },
+  { id: 'appearance', i18nKey: 'settings.appearance', icon: 'palette', desc: t('settings.appearanceDesc') },
+  { id: 'language', i18nKey: 'settings.language', icon: 'globe', desc: t('settings.languageDesc') },
+  { id: 'notification', i18nKey: 'settings.notification', icon: 'bell', desc: t('settings.notificationDesc') },
+  { id: 'privacy', i18nKey: 'settings.privacy', icon: 'eye', desc: t('settings.privacyDesc') },
+  { id: 'about', i18nKey: 'settings.about', icon: 'info', desc: t('settings.aboutDesc') }
+])
+
+const getSettingsNavIcon = (icon) => {
+  const icons = {
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    palette: '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04-.23-.29-.38-.63-.38-1.04 0-.93.76-1.69 1.69-1.69H16c3.31 0 6-2.69 6-6 0-5.5-4.5-9.83-10-9.83z"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'
+  }
+  return icons[icon] || icons.info
+}
 
 const allData = reactive({
   overview: { stats: null, categories: null, recentBooks: null },
@@ -102,12 +134,15 @@ const restoreTabState = () => {
   }
 }
 
+const previousTabId = ref('overview')
+
 const switchTab = (id) => {
   if (activeNavId.value === id) return
   const oldIndex = navItems.value.findIndex(n => n.id === activeNavId.value)
   const newIndex = navItems.value.findIndex(n => n.id === id)
   tabTransitionName.value = newIndex > oldIndex ? 'slide-left' : 'slide-right'
   saveTabState()
+  previousTabId.value = activeNavId.value
   activeNavId.value = id
   const item = navItems.value.find(n => n.id === id)
   if (item && !item.loaded) item.loaded = true
@@ -115,6 +150,18 @@ const switchTab = (id) => {
     const mainEl = document.querySelector('.main-content')
     if (mainEl && tabScrollPositions[id] !== undefined) {
       mainEl.scrollTop = tabScrollPositions[id]
+    }
+  })
+}
+
+const handleToggleUserMenu = () => {
+  toggleUserDropdown()
+  if (!showUserDropdown.value) return
+  nextTick(() => {
+    if (userMenuRef.value) {
+      const rect = userMenuRef.value.getBoundingClientRect()
+      userDropdownPos.top = rect.bottom + 8
+      userDropdownPos.right = window.innerWidth - rect.right
     }
   })
 }
@@ -190,36 +237,45 @@ const toggleOverflow = () => {
 }
 
 const preloadData = async () => {
-  try {
-    const [overviewResult, readerResult, bookResult, borrowResult] = await Promise.all([
-      overviewApi.getAll(),
-      readerApi.getAll(),
-      bookApi.getAll(),
-      borrowApi.getAll()
-    ])
-
-    if (overviewResult.stats) allData.overview.stats = overviewResult.stats
-    if (overviewResult.categories) allData.overview.categories = overviewResult.categories
-    if (overviewResult.recentBooks) allData.overview.recentBooks = overviewResult.recentBooks
-    if (readerResult.stats) allData.readers.stats = readerResult.stats
-    if (readerResult.readerTypes) allData.readers.readerTypes = readerResult.readerTypes
-    if (readerResult.monthlyTrend) allData.readers.monthlyTrend = readerResult.monthlyTrend
-    if (readerResult.topReaders) allData.readers.topReaders = readerResult.topReaders
-    if (bookResult.stats) allData.books.stats = bookResult.stats
-    if (bookResult.categories) allData.books.categories = bookResult.categories
-    if (bookResult.hotBooks) allData.books.hotBooks = bookResult.hotBooks
-    if (borrowResult.stats) allData.borrows.stats = borrowResult.stats
-    if (borrowResult.actionStats) allData.borrows.actionStats = borrowResult.actionStats
-    if (borrowResult.degreeStats) allData.borrows.degreeStats = borrowResult.degreeStats
-    if (borrowResult.topBorrowers) allData.borrows.topBorrowers = borrowResult.topBorrowers
-    if (borrowResult.topBooks) allData.borrows.topBooks = borrowResult.topBooks
-    if (borrowResult.recentBorrows) allData.borrows.recentBorrows = borrowResult.recentBorrows
-
-    dataLoaded.value = true
-  } catch (e) {
-    console.error('预加载数据失败', e)
-    dataLoaded.value = true
+  const loadModule = async (apiGetAll, dataKey, mappings) => {
+    try {
+      const result = await apiGetAll()
+      for (const [resultKey, targetKey] of mappings) {
+        if (result[resultKey]) allData[targetKey][resultKey] = result[resultKey]
+      }
+    } catch (e) {
+      console.error(`预加载${dataKey}数据失败`, e)
+    }
   }
+
+  await Promise.all([
+    loadModule(overviewApi.getAll, 'overview', [
+      ['stats', 'overview'],
+      ['categories', 'overview'],
+      ['recentBooks', 'overview']
+    ]),
+    loadModule(readerApi.getAll, 'readers', [
+      ['stats', 'readers'],
+      ['readerTypes', 'readers'],
+      ['monthlyTrend', 'readers'],
+      ['topReaders', 'readers']
+    ]),
+    loadModule(bookApi.getAll, 'books', [
+      ['stats', 'books'],
+      ['categories', 'books'],
+      ['hotBooks', 'books']
+    ]),
+    loadModule(borrowApi.getAll, 'borrows', [
+      ['stats', 'borrows'],
+      ['actionStats', 'borrows'],
+      ['degreeStats', 'borrows'],
+      ['topBorrowers', 'borrows'],
+      ['topBooks', 'borrows'],
+      ['recentBorrows', 'borrows']
+    ])
+  ])
+
+  dataLoaded.value = true
 }
 
 const getNavIcon = (icon) => {
@@ -243,7 +299,21 @@ onMounted(async () => {
   navItems.value.find(n => n.id === activeNavId.value).loaded = true
   await preloadData()
   document.addEventListener('click', hideContextMenu)
+  const savedSidebar = localStorage.getItem('sidebar_collapsed')
+  if (savedSidebar === 'true') sidebarCollapsed.value = true
+  window.addEventListener('appearance-change', handleAppearanceChange)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('click', hideContextMenu)
+  window.removeEventListener('appearance-change', handleAppearanceChange)
+})
+
+const handleAppearanceChange = (e) => {
+  if (e.detail?.sidebarStyle) {
+    sidebarCollapsed.value = e.detail.sidebarStyle === 'collapsed'
+  }
+}
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -254,8 +324,11 @@ const toggleSidebar = () => {
   <div class="dashboard" @click="hideContextMenu">
     <header class="header">
       <div class="header-left">
-        <button class="sidebar-toggle" @click="toggleSidebar" :class="{ collapsed: sidebarCollapsed }">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="sidebar-toggle" @click="activeNavId === 'settings' ? switchTab(previousTabId) : toggleSidebar()" :class="{ collapsed: sidebarCollapsed, 'back-btn': activeNavId === 'settings' }">
+          <svg v-if="activeNavId === 'settings'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="3" y1="6" x2="21" y2="6"/>
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
@@ -269,21 +342,9 @@ const toggleSidebar = () => {
             </svg>
           </div>
           <div class="title-group">
-            <h1>图书数据分析系统</h1>
+            <h1>{{ t('common.systemTitle') }}</h1>
             <span class="subtitle">LIBRARY DATA ANALYTICS</span>
           </div>
-        </div>
-      </div>
-
-      <div class="header-center">
-        <div class="page-tabs">
-          <button class="tab active">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            {{ navItems.find(n => n.id === activeNavId)?.label || '数据总览' }}
-          </button>
-          <span class="tab-desc">实时监控图书流通数据，洞察数据价值</span>
         </div>
       </div>
       
@@ -299,7 +360,7 @@ const toggleSidebar = () => {
         </div>
 
         <div class="header-actions">
-          <button class="icon-btn" title="全屏">
+          <button class="icon-btn" :title="t('common.fullscreen')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 3 21 3 21 9"/>
               <polyline points="9 21 3 21 3 15"/>
@@ -307,34 +368,93 @@ const toggleSidebar = () => {
               <line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
           </button>
-          <button class="icon-btn" title="通知">
+          <button class="icon-btn" :title="t('common.notification')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
           </button>
-          <button class="icon-btn" title="设置">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
         </div>
 
-        <div class="user-menu">
+        <div class="user-menu" ref="userMenuRef" @click="handleToggleUserMenu">
           <div class="avatar">
             <span class="avatar-text">{{ username.charAt(0).toUpperCase() }}</span>
           </div>
           <div class="user-details">
             <span class="user-name">{{ username }}</span>
-            <span class="user-role-badge" :class="role">{{ role === 'admin' ? '管理员' : '用户' }}</span>
+            <span class="user-role-badge" :class="role">{{ role === 'admin' ? t('common.admin') : t('common.user') }}</span>
           </div>
+          <svg class="dropdown-arrow" :class="{ open: showUserDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+
+        <Teleport to="body">
+          <transition name="dropdown-fade">
+            <div v-if="showUserDropdown" class="user-dropdown-overlay" @click="showUserDropdown = false">
+              <div class="user-dropdown" :style="{ top: userDropdownPos.top + 'px', right: userDropdownPos.right + 'px' }" @click.stop>
+                <div class="dropdown-header">
+                  <div class="dropdown-avatar"><span>{{ username.charAt(0).toUpperCase() }}</span></div>
+                  <div class="dropdown-user-info">
+                    <div class="dropdown-username">{{ username }}</div>
+                    <div class="dropdown-role">{{ role === 'admin' ? t('common.admin') : t('common.user') }}</div>
+                  </div>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-body">
+                  <div class="dropdown-item" @click="switchTab('settings'); settingsActiveMenu = 'language'; showUserDropdown = false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span>{{ t('common.settingsTitle') }}</span>
+                  </div>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-footer">
+                  <div class="dropdown-item logout-item" @click="logout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                      <polyline points="16 17 21 12 16 7"/>
+                      <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    <span>{{ t('common.logout') }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </Teleport>
       </div>
     </header>
     
     <div class="layout">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <template v-if="activeNavId === 'settings'">
+          <div class="sidebar-settings-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="sidebar-settings-title" :class="{ hidden: sidebarCollapsed }">{{ t('settings.title') }}</span>
+          </div>
+          <nav class="nav-menu">
+            <a v-for="item in settingsMenuItems" :key="item.id" class="nav-item" :class="{ active: settingsActiveMenu === item.id }" @click="settingsActiveMenu = item.id">
+              <div class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getSettingsNavIcon(item.icon)"/>
+              </div>
+              <div class="nav-text" :class="{ hidden: sidebarCollapsed }">
+                <span class="nav-label">{{ t(item.i18nKey) }}</span>
+                <span class="nav-desc">{{ item.desc }}</span>
+              </div>
+              <div class="nav-indicator" v-if="settingsActiveMenu === item.id"></div>
+            </a>
+          </nav>
+          <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
+            <button @click="switchTab('overview')" class="sidebar-back-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>{{ t('nav.overview') }}</span>
+            </button>
+          </div>
+        </template>
+        <template v-else>
         <nav class="nav-menu">
           <div
             v-for="(item, index) in visibleItems"
@@ -355,13 +475,13 @@ const toggleSidebar = () => {
             <div class="nav-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getNavIcon(item.icon)"/>
             </div>
-            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ item.label }}</span>
+            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t(item.i18nKey) }}</span>
             <span v-if="item.pinned && sidebarCollapsed" class="pin-indicator"></span>
             <button
               v-if="item.closable && !item.pinned && !sidebarCollapsed"
               class="nav-close-btn"
               @click.stop="closeTab(item.id)"
-              title="关闭"
+              :title="t('common.close')"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -375,7 +495,7 @@ const toggleSidebar = () => {
                 <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
               </svg>
             </div>
-            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">更多</span>
+            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t('common.more') }}</span>
 
             <transition name="dropdown">
               <div v-if="overflowMenuVisible" class="overflow-dropdown" @click.stop>
@@ -390,7 +510,7 @@ const toggleSidebar = () => {
                   <div class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getNavIcon(item.icon)"/>
                   </div>
-                  <span>{{ item.label }}</span>
+                  <span>{{ t(item.i18nKey) }}</span>
                 </div>
               </div>
             </transition>
@@ -400,12 +520,13 @@ const toggleSidebar = () => {
         <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
           <div class="version-badge">v1.0.0</div>
         </div>
+        </template>
       </aside>
       
       <main class="main-content" :class="{ expanded: sidebarCollapsed }">
         <div v-if="!dataLoaded" class="loading-overlay">
           <div class="loading-spinner"></div>
-          <span class="loading-text">正在加载数据...</span>
+          <span class="loading-text">{{ t('common.loading') }}</span>
         </div>
         <template v-else>
           <transition :name="tabTransitionName" mode="out-in">
@@ -434,7 +555,7 @@ const toggleSidebar = () => {
               <ReportView :all-data="allData" />
             </div>
             <div v-else-if="activeNavId === 'settings'" key="settings" class="tab-panel">
-              <SettingsView />
+              <SettingsView :embedded="true" v-model:activeMenu="settingsActiveMenu" />
             </div>
           </transition>
         </template>
@@ -454,7 +575,7 @@ const toggleSidebar = () => {
             <path d="M12 2v8l4 2"/>
             <circle cx="12" cy="12" r="10"/>
           </svg>
-          {{ navItems.find(n => n.id === contextMenuTarget)?.pinned ? '取消固定' : '固定标签' }}
+          {{ navItems.find(n => n.id === contextMenuTarget)?.pinned ? t('common.unpinTab') : t('common.pinTab') }}
         </button>
         <button
           v-if="navItems.find(n => n.id === contextMenuTarget)?.closable && !navItems.find(n => n.id === contextMenuTarget)?.pinned"
@@ -464,14 +585,14 @@ const toggleSidebar = () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
-          关闭当前标签
+          {{ t('common.closeCurrent') }}
         </button>
         <button class="ctx-item" @click="closeOtherTabs(contextMenuTarget); hideContextMenu()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <line x1="9" y1="3" x2="9" y2="21"/>
           </svg>
-          关闭其他标签
+          {{ t('common.closeOthers') }}
         </button>
       </div>
     </transition>

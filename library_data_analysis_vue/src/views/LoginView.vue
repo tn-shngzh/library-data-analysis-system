@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api/auth'
 import '@/styles/login.css'
 
+const { t } = useI18n()
 const router = useRouter()
 const username = ref('')
 const password = ref('')
@@ -22,11 +24,10 @@ const fetchCaptcha = async () => {
       captchaKey.value = data.key
       captchaUrl.value = data.image
     } else {
-      error.value = '验证码服务不可用'
+      error.value = t('login.captchaUnavailable')
     }
   } catch (e) {
-    error.value = '无法连接验证码服务'
-    console.error('获取验证码失败', e)
+    error.value = t('login.captchaConnectFail')
   }
 }
 
@@ -38,7 +39,7 @@ const handleLogin = async () => {
   error.value = ''
   
   if (!captcha.value) {
-    error.value = '请输入验证码'
+    error.value = t('login.captchaRequired')
     return
   }
   
@@ -70,12 +71,12 @@ const handleLogin = async () => {
       }
     } else {
       const errData = await response.json()
-      error.value = errData.detail || '登录失败'
+      error.value = errData.detail || t('login.loginFailed')
       captcha.value = ''
       fetchCaptcha()
     }
   } catch (e) {
-    error.value = '网络错误，请重试'
+    error.value = t('login.networkError')
     fetchCaptcha()
   } finally {
     loading.value = false
@@ -95,18 +96,18 @@ const handleLogin = async () => {
             </svg>
           </div>
           <div class="brand-text">
-            <div class="brand-title">图书馆管理系统</div>
-            <div class="brand-subtitle">Library Management System</div>
+            <div class="brand-title">{{ t('login.brandTitle') }}</div>
+          <div class="brand-subtitle">{{ t('login.brandSubtitle') }}</div>
           </div>
         </div>
 
         <div class="hero">
           <h1>
-            智慧图书馆 · <span class="highlight">一站式服务</span>
+            {{ t('login.heroTitle') }} · <span class="highlight">{{ t('login.heroHighlight') }}</span>
           </h1>
           <p class="hero-desc">
-            普通用户：在线借阅、查询图书、管理个人账户<br>
-            管理员：数据分析、运营管理、决策支持
+            {{ t('login.heroDescUser') }}<br>
+            {{ t('login.heroDescAdmin') }}
           </p>
         </div>
 
@@ -118,8 +119,8 @@ const handleLogin = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">用户服务</div>
-              <div class="feature-desc">在线借阅查询管理</div>
+              <div class="feature-name">{{ t('login.featureUserService') }}</div>
+              <div class="feature-desc">{{ t('login.featureUserServiceDesc') }}</div>
             </div>
           </div>
 
@@ -130,8 +131,8 @@ const handleLogin = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">图书资源</div>
-              <div class="feature-desc">海量图书在线借阅</div>
+              <div class="feature-name">{{ t('login.featureBookResource') }}</div>
+              <div class="feature-desc">{{ t('login.featureBookResourceDesc') }}</div>
             </div>
           </div>
 
@@ -142,23 +143,23 @@ const handleLogin = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">数据分析</div>
-              <div class="feature-desc">管理决策支持</div>
+              <div class="feature-name">{{ t('login.featureDataAnalysis') }}</div>
+              <div class="feature-desc">{{ t('login.featureDataAnalysisDesc') }}</div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="copyright">
-        © 2024 图书馆管理系统·让服务更智慧
+        © 2024 {{ t('login.copyright') }}
       </div>
     </div>
 
     <div class="login-right">
       <div class="login-card">
         <div class="login-header">
-          <h2>欢迎登录</h2>
-          <p>图书馆管理系统 - 根据您的角色自动进入相应系统</p>
+          <h2>{{ t('login.welcomeTitle') }}</h2>
+          <p>{{ t('login.welcomeDesc') }}</p>
         </div>
 
         <div v-if="error" class="error-message">
@@ -175,7 +176,7 @@ const handleLogin = async () => {
               <input 
                 v-model="username" 
                 type="text" 
-                placeholder="请输入用户名"
+                :placeholder="t('login.usernamePlaceholder')"
                 required
               />
             </div>
@@ -190,7 +191,7 @@ const handleLogin = async () => {
               <input 
                 v-model="password" 
                 type="password" 
-                placeholder="请输入密码"
+                :placeholder="t('login.passwordPlaceholder')"
                 required
               />
             </div>
@@ -204,14 +205,14 @@ const handleLogin = async () => {
               <input 
                 v-model="captcha" 
                 type="text" 
-                placeholder="请输入验证码"
+                :placeholder="t('login.captchaPlaceholder')"
                 maxlength="4"
                 required
               />
             </div>
             <div class="captcha-box" @click="fetchCaptcha">
-              <img v-if="captchaUrl" :src="captchaUrl" alt="验证码" />
-              <span v-else>加载中...</span>
+              <img v-if="captchaUrl" :src="captchaUrl" :alt="t('login.captchaAlt')" />
+              <span v-else>{{ t('login.loading') }}</span>
             </div>
             <button type="button" class="refresh-captcha" @click="fetchCaptcha">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -224,18 +225,18 @@ const handleLogin = async () => {
           <div class="form-options">
             <label class="remember-me">
               <input type="checkbox" v-model="rememberMe" />
-              <span>记住我</span>
+              <span>{{ t('login.rememberMe') }}</span>
             </label>
-            <a href="#" class="forgot-password">忘记密码?</a>
+            <a href="#" class="forgot-password">{{ t('login.forgotPassword') }}</a>
           </div>
 
           <button type="submit" class="submit-btn" :disabled="loading">
-            {{ loading ? '登录中...' : '登录' }}
+            {{ loading ? t('login.loggingIn') : t('login.loginBtn') }}
           </button>
 
           <div class="form-footer">
-            <span>还没有账户？</span>
-            <router-link to="/register" class="link-btn">立即注册</router-link>
+            <span>{{ t('login.noAccount') }}</span>
+            <router-link to="/register" class="link-btn">{{ t('login.registerNow') }}</router-link>
           </div>
         </form>
       </div>

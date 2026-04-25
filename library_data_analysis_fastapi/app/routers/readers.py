@@ -50,10 +50,13 @@ async def get_reader_types():
             """)
             rows = cur.fetchall()
             total = sum(r[1] for r in rows)
-            return [
-                {"name": r[0], "count": r[1], "percent": round(r[1] / total * 100, 1)}
-                for r in rows
-            ]
+            result = []
+            for i, r in enumerate(rows):
+                pct = round(r[1] / total * 100, 1) if total else 0
+                if i == len(rows) - 1:
+                    pct = round(100.0 - sum(round(rr[1] / total * 100, 1) for rr in rows[:-1]), 1)
+                result.append({"name": r[0], "count": r[1], "percent": pct})
+            return result
     finally:
         conn.close()
 

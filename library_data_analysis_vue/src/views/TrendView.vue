@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { readerApi } from '@/api/readers'
 import { borrowApi } from '@/api/borrows'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -30,7 +33,7 @@ const fetchTrendData = async () => {
     if (readerData.monthlyTrend) monthlyTrend.value = readerData.monthlyTrend
     if (dailyRes.ok) dailyTrend.value = await dailyRes.json()
   } catch (e) {
-    console.error('获取趋势数据失败', e)
+    console.error('Failed to fetch trend data', e)
   } finally {
     loading.value = false
   }
@@ -51,7 +54,7 @@ onMounted(async () => {
       const dailyRes = await borrowApi.getDailyTrend()
       if (dailyRes.ok) dailyTrend.value = await dailyRes.json()
     } catch (e) {
-      console.error('获取日趋势数据失败', e)
+      console.error('Failed to fetch daily trend data', e)
     }
     loading.value = false
   }
@@ -128,10 +131,10 @@ const statCards = computed(() => {
   const max = data.length ? Math.max(...data.map(d => d.count || 0)) : 0
   const maxMonth = data.find(d => d.count === max)?.month || '-'
   return [
-    { label: '年度总量', value: formatNumber(total), icon: 'total', color: '#6366f1' },
-    { label: '月均值', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
-    { label: '峰值月份', value: maxMonth, icon: 'peak', color: '#10b981' },
-    { label: '峰值人数', value: formatNumber(max), icon: 'max', color: '#f59e0b' }
+    { i18nKey: 'trend.yearlyTotal', value: formatNumber(total), icon: 'total', color: '#6366f1' },
+    { i18nKey: 'trend.monthlyAvg', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
+    { i18nKey: 'trend.peakMonth', value: maxMonth, icon: 'peak', color: '#10b981' },
+    { i18nKey: 'trend.peakValue', value: formatNumber(max), icon: 'max', color: '#f59e0b' }
   ]
 })
 </script>
@@ -140,8 +143,8 @@ const statCards = computed(() => {
   <div class="trend-view">
     <div class="page-header">
       <div class="header-info">
-        <h1>趋势分析</h1>
-        <p>借阅与读者活跃度趋势变化分析</p>
+        <h1>{{ t('trend.title') }}</h1>
+        <p>{{ t('trend.desc') }}</p>
       </div>
       <button class="refresh-btn" @click="fetchTrendData" :disabled="loading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -149,18 +152,18 @@ const statCards = computed(() => {
           <path d="M1 20v-6h6"/>
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
-        <span>刷新</span>
+        <span>{{ t('common.refresh') }}</span>
       </button>
     </div>
 
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <span>正在加载数据...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <template v-else>
       <div class="stats-grid">
-        <div v-for="card in statCards" :key="card.label" class="stat-card" :style="{ '--accent': card.color }">
+        <div v-for="card in statCards" :key="card.i18nKey" class="stat-card" :style="{ '--accent': card.color }">
           <div class="stat-icon">
             <svg v-if="card.icon === 'total'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -181,23 +184,23 @@ const statCards = computed(() => {
             </svg>
           </div>
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ card.value }}</span>
           </div>
         </div>
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn" :class="{ active: activeTab === 'monthly' }" @click="activeTab = 'monthly'">月度趋势</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">每日趋势</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'monthly' }" @click="activeTab = 'monthly'">{{ t('trend.monthlyTab') }}</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">{{ t('trend.dailyTab') }}</button>
       </div>
 
       <div v-if="activeTab === 'monthly'" class="card">
         <div class="card-header">
-          <h3>月度活跃读者趋势</h3>
-          <span class="card-subtitle">展示每月活跃读者数量变化</span>
+          <h3>{{ t('trend.monthlyActiveTrend') }}</h3>
+          <span class="card-subtitle">{{ t('trend.monthlyActiveSubtitle') }}</span>
         </div>
-        <div class="chart-container">
+        <div v-if="monthlyTrend.length" class="chart-container">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="trend-chart">
             <defs>
               <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -231,12 +234,21 @@ const statCards = computed(() => {
             </g>
           </svg>
         </div>
+        <div v-else class="empty-chart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" width="48" height="48">
+            <path d="M3 3v18h18"/>
+            <path d="M18 17V9"/>
+            <path d="M13 17V5"/>
+            <path d="M8 17v-3"/>
+          </svg>
+          <p>{{ t('common.noData') }}</p>
+        </div>
       </div>
 
       <div v-if="activeTab === 'daily'" class="card">
         <div class="card-header">
-          <h3>每日借阅趋势</h3>
-          <span class="card-subtitle">展示每日借阅数量变化</span>
+          <h3>{{ t('trend.dailyBorrowTrend') }}</h3>
+          <span class="card-subtitle">{{ t('trend.dailyBorrowSubtitle') }}</span>
         </div>
         <div v-if="dailyTrend.length" class="chart-container">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="trend-chart">
@@ -281,21 +293,21 @@ const statCards = computed(() => {
             <path d="M13 17V5"/>
             <path d="M8 17v-3"/>
           </svg>
-          <p>每日趋势数据加载中...</p>
+          <p>{{ t('trend.loadingDaily') }}</p>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3>月度活跃数据明细</h3>
+          <h3>{{ t('trend.monthlyDetail') }}</h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>月份</th>
-              <th>活跃人数</th>
-              <th>环比变化</th>
-              <th>占比</th>
+              <th>{{ t('trend.month') }}</th>
+              <th>{{ t('trend.activeCount') }}</th>
+              <th>{{ t('trend.change') }}</th>
+              <th>{{ t('trend.percent') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -315,6 +327,9 @@ const statCards = computed(() => {
                   <span class="percent-text">{{ ((item.count || 0) / (monthlyTrend.reduce((s, d) => s + (d.count || 0), 0) || 1) * 100).toFixed(1) }}%</span>
                 </div>
               </td>
+            </tr>
+            <tr v-if="monthlyTrend.length === 0" class="empty-row">
+              <td colspan="4">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -653,5 +668,12 @@ const statCards = computed(() => {
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.empty-row td {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-neutral-400);
+  font-size: var(--text-sm);
 }
 </style>

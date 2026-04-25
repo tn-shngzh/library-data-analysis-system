@@ -9,16 +9,20 @@ export const bookApi = {
     get(`/api/books/search?keyword=${encodeURIComponent(keyword)}&category=${encodeURIComponent(category)}&page=${page}&page_size=${pageSize}`),
 
   getAll: async () => {
-    const [statsRes, catRes, hotRes] = await Promise.all([
-      bookApi.getStats(),
-      bookApi.getCategories(),
-      bookApi.getHot()
-    ])
-
     const result = {}
-    if (statsRes.ok) result.stats = await statsRes.json()
-    if (catRes.ok) result.categories = await catRes.json()
-    if (hotRes.ok) result.hotBooks = await hotRes.json()
+    const calls = [
+      ['stats', bookApi.getStats],
+      ['categories', bookApi.getCategories],
+      ['hotBooks', bookApi.getHot]
+    ]
+    const responses = await Promise.allSettled(calls.map(([, fn]) => fn()))
+    for (let i = 0; i < calls.length; i++) {
+      const [key] = calls[i]
+      const res = responses[i]
+      if (res.status === 'fulfilled' && res.value.ok) {
+        result[key] = await res.value.json()
+      }
+    }
     return result
   }
 }

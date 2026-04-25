@@ -15,11 +15,10 @@ async def get_book_stats():
             cur.execute("SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE action_date BETWEEN 20190401 AND 20190430")
             month_items = cur.fetchone()[0]
 
-            cur.execute("SELECT COUNT(DISTINCT c.bib_id) FROM circulations c JOIN book_categories bc ON c.bib_id = bc.bib_id WHERE c.action = 'CKO'")
+            cur.execute("SELECT COUNT(*) FROM mv_book_stats WHERE borrow_count > 0")
             borrowed_items = cur.fetchone()[0]
 
             borrow_rate = round(borrowed_items / total_items * 100, 1) if total_items else 0
-
             zero_borrow = total_items - borrowed_items if total_items > borrowed_items else 0
 
             return {
@@ -38,23 +37,20 @@ async def get_book_categories():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT
-                    bc.category,
-                    COUNT(DISTINCT bc.bib_id) as total_items
+                SELECT bc.category, COUNT(*) as total_items
                 FROM book_categories bc
                 GROUP BY bc.category
                 ORDER BY total_items DESC
             """)
             rows = cur.fetchall()
             total = sum(r[1] for r in rows)
-            return [
-                {
-                    "name": r[0],
-                    "count": r[1],
-                    "percent": round(r[1] / total * 100, 1) if total else 0
-                }
-                for r in rows
-            ]
+            result = []
+            for i, r in enumerate(rows):
+                pct = round(r[1] / total * 100, 1) if total else 0
+                if i == len(rows) - 1:
+                    pct = round(100.0 - sum(round(rr[1] / total * 100, 1) for rr in rows[:-1]), 1)
+                result.append({"name": r[0], "count": r[1], "percent": pct})
+            return result
     finally:
         conn.close()
 
@@ -65,11 +61,10 @@ async def get_hot_books():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT bc.bib_id, bc.name, bc.category, COUNT(c.id) as borrow_count
-                FROM book_categories bc
-                JOIN circulations c ON bc.bib_id = c.bib_id AND c.action = 'CKO'
-                GROUP BY bc.bib_id, bc.name, bc.category
-                ORDER BY borrow_count DESC
+                SELECT t.bib_id, bc.name, t.category, t.borrow_count
+                FROM mv_top_books t
+                JOIN book_categories bc ON t.bib_id = bc.bib_id
+                ORDER BY t.borrow_count DESC
                 LIMIT 20
             """)
             rows = cur.fetchall()
@@ -123,14 +118,9 @@ async def search_books(
 
             data_sql = f"""
                 SELECT bc.bib_id, bc.name, bc.category,
-                       COALESCE(borrow_counts.borrow_count, 0) as borrow_count
+                       COALESCE(bs.borrow_count, 0) as borrow_count
                 FROM book_categories bc
-                LEFT JOIN (
-                    SELECT bib_id, COUNT(*) as borrow_count
-                    FROM circulations
-                    WHERE action = 'CKO'
-                    GROUP BY bib_id
-                ) borrow_counts ON bc.bib_id = borrow_counts.bib_id
+                LEFT JOIN mv_book_stats bs ON bc.bib_id = bs.bib_id
                 {where_clause}
                 ORDER BY borrow_count DESC, bc.bib_id ASC
                 LIMIT %s OFFSET %s

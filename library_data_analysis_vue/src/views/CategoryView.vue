@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { bookApi } from '@/api/books'
 import { borrowApi } from '@/api/borrows'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -34,10 +37,10 @@ const topCategory = computed(() => {
 })
 
 const statCards = computed(() => [
-  { label: '图书分类数', value: categories.value.length, icon: 'layers', color: '#6366f1' },
-  { label: '馆藏总量', value: formatNumber(totalBooks.value), icon: 'book', color: '#3b82f6' },
-  { label: '借阅总量', value: formatNumber(totalBorrows.value), icon: 'activity', color: '#10b981' },
-  { label: '最大分类', value: topCategory.value, icon: 'star', color: '#f59e0b' }
+  { i18nKey: 'category.categoryCount', value: categories.value.length, icon: 'layers', color: '#6366f1' },
+  { i18nKey: 'category.totalBooks', value: formatNumber(totalBooks.value), icon: 'book', color: '#3b82f6' },
+  { i18nKey: 'category.totalBorrows', value: formatNumber(totalBorrows.value), icon: 'activity', color: '#10b981' },
+  { i18nKey: 'category.topCategory', value: topCategory.value, icon: 'star', color: '#f59e0b' }
 ])
 
 const fetchCategoryData = async () => {
@@ -49,7 +52,7 @@ const fetchCategoryData = async () => {
     const borrowData = await borrowApi.getAll()
     if (borrowData.degreeStats) borrowByCategory.value = borrowData.degreeStats
   } catch (e) {
-    console.error('获取分类数据失败', e)
+    console.error('Failed to fetch category data', e)
   } finally {
     loading.value = false
   }
@@ -84,8 +87,8 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
   <div class="category-view">
     <div class="page-header">
       <div class="header-info">
-        <h1>分类分析</h1>
-        <p>馆藏图书分类统计与借阅分析</p>
+        <h1>{{ t('category.title') }}</h1>
+        <p>{{ t('category.desc') }}</p>
       </div>
       <button class="refresh-btn" @click="fetchCategoryData" :disabled="loading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -93,18 +96,18 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
           <path d="M1 20v-6h6"/>
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
-        <span>刷新</span>
+        <span>{{ t('common.refresh') }}</span>
       </button>
     </div>
 
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <span>正在加载数据...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <template v-else>
       <div class="stats-grid">
-        <div v-for="card in statCards" :key="card.label" class="stat-card" :style="{ '--accent': card.color }">
+        <div v-for="card in statCards" :key="card.i18nKey" class="stat-card" :style="{ '--accent': card.color }">
           <div class="stat-icon">
             <svg v-if="card.icon === 'layers'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -123,20 +126,20 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
             </svg>
           </div>
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ card.value }}</span>
           </div>
         </div>
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn" :class="{ active: activeTab === 'category' }" @click="activeTab = 'category'">分类占比</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'borrow' }" @click="activeTab = 'borrow'">借阅分析</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'category' }" @click="activeTab = 'category'">{{ t('category.categoryRatio') }}</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'borrow' }" @click="activeTab = 'borrow'">{{ t('category.borrowAnalysis') }}</button>
       </div>
 
       <div v-if="activeTab === 'category'" class="card">
         <div class="card-header">
-          <h3>图书分类占比</h3>
+          <h3>{{ t('category.categoryRatio') }}</h3>
         </div>
         <div class="category-chart">
           <div class="bar-list">
@@ -161,7 +164,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
       <div v-if="activeTab === 'borrow'" class="card">
         <div class="card-header">
-          <h3>读者类型借阅分布</h3>
+          <h3>{{ t('category.readerBorrowDistribution') }}</h3>
         </div>
         <div v-if="borrowByCategory.length" class="category-chart">
           <div class="bar-list">
@@ -183,21 +186,21 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
           </div>
         </div>
         <div v-else class="empty-state">
-          <p>暂无借阅分类数据</p>
+          <p>{{ t('category.noData') }}</p>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3>分类详情列表</h3>
+          <h3>{{ t('category.detailList') }}</h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>排名</th>
-              <th>分类名称</th>
-              <th>数量</th>
-              <th>占比</th>
+              <th>{{ t('category.rank') }}</th>
+              <th>{{ t('category.name') }}</th>
+              <th>{{ t('category.count') }}</th>
+              <th>{{ t('category.percent') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -213,6 +216,9 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
                   <span class="percent-text">{{ cat.percent }}%</span>
                 </div>
               </td>
+            </tr>
+            <tr v-if="categories.length === 0" class="empty-row">
+              <td colspan="4">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -554,5 +560,12 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.empty-row td {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-neutral-400);
+  font-size: var(--text-sm);
 }
 </style>

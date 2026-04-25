@@ -1,9 +1,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api/auth'
 import '@/styles/login.css'
 
+const { t } = useI18n()
 const router = useRouter()
 const username = ref('')
 const password = ref('')
@@ -16,37 +18,37 @@ const validateForm = () => {
   error.value = ''
   
   if (!username.value || username.value.trim().length === 0) {
-    error.value = '用户名不能为空'
+    error.value = t('register.usernameRequired')
     return false
   }
   if (username.value.length < 3) {
-    error.value = '用户名长度不能少于3个字符'
+    error.value = t('register.usernameMinLength')
     return false
   }
   if (username.value.length > 20) {
-    error.value = '用户名长度不能超过20个字符'
+    error.value = t('register.usernameMaxLength')
     return false
   }
   if (!/^[a-zA-Z0-9_]+$/.test(username.value)) {
-    error.value = '用户名只能包含字母、数字和下划线'
+    error.value = t('register.usernamePattern')
     return false
   }
   
   if (!password.value || password.value.trim().length === 0) {
-    error.value = '密码不能为空'
+    error.value = t('register.passwordRequired')
     return false
   }
   if (password.value.length < 6) {
-    error.value = '密码长度不能少于6个字符'
+    error.value = t('register.passwordMinLength')
     return false
   }
   if (password.value.length > 50) {
-    error.value = '密码长度不能超过50个字符'
+    error.value = t('register.passwordMaxLength')
     return false
   }
   
   if (password.value !== confirmPassword.value) {
-    error.value = '两次输入的密码不一致'
+    error.value = t('register.passwordMismatch')
     return false
   }
   
@@ -67,17 +69,17 @@ const handleRegister = async () => {
 
     if (response.ok) {
       const data = await response.json()
-      success.value = `注册成功！用户 ${data.username} 已创建，正在跳转到登录页面...`
+      success.value = t('register.successMsg', { username: data.username })
       
       setTimeout(() => {
         router.push('/login')
       }, 2000)
     } else {
       const errData = await response.json()
-      error.value = errData.detail || '注册失败'
+      error.value = errData.detail || t('register.registerFailed')
     }
   } catch (e) {
-    error.value = '网络错误，请重试'
+    error.value = t('register.networkError')
   } finally {
     loading.value = false
   }
@@ -96,18 +98,18 @@ const handleRegister = async () => {
             </svg>
           </div>
           <div class="brand-text">
-            <div class="brand-title">图书馆管理系统</div>
-            <div class="brand-subtitle">Library Management System</div>
+            <div class="brand-title">{{ t('login.brandTitle') }}</div>
+            <div class="brand-subtitle">{{ t('login.brandSubtitle') }}</div>
           </div>
         </div>
 
         <div class="hero">
           <h1>
-            智慧图书馆 · <span class="highlight">新用户注册</span>
+            {{ t('login.heroTitle') }} · <span class="highlight">{{ t('register.heroHighlight') }}</span>
           </h1>
           <p class="hero-desc">
-            创建您的账户，开启智慧图书馆服务之旅<br>
-            注册后即可在线借阅、查询图书、管理个人账户
+            {{ t('register.heroDesc1') }}<br>
+            {{ t('register.heroDesc2') }}
           </p>
         </div>
 
@@ -119,8 +121,8 @@ const handleRegister = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">快速注册</div>
-              <div class="feature-desc">简单几步完成账户创建</div>
+              <div class="feature-name">{{ t('register.featureQuick') }}</div>
+              <div class="feature-desc">{{ t('register.featureQuickDesc') }}</div>
             </div>
           </div>
 
@@ -131,8 +133,8 @@ const handleRegister = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">安全保护</div>
-              <div class="feature-desc">密码加密存储保障安全</div>
+              <div class="feature-name">{{ t('register.featureSecurity') }}</div>
+              <div class="feature-desc">{{ t('register.featureSecurityDesc') }}</div>
             </div>
           </div>
 
@@ -143,23 +145,23 @@ const handleRegister = async () => {
               </svg>
             </div>
             <div class="feature-info">
-              <div class="feature-name">即刻使用</div>
-              <div class="feature-desc">注册后立即开始借阅</div>
+              <div class="feature-name">{{ t('register.featureInstant') }}</div>
+              <div class="feature-desc">{{ t('register.featureInstantDesc') }}</div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="copyright">
-        © 2024 图书馆管理系统·让服务更智慧
+        © 2024 {{ t('login.copyright') }}
       </div>
     </div>
 
     <div class="login-right">
       <div class="login-card">
         <div class="login-header">
-          <h2>创建账户</h2>
-          <p>填写以下信息完成注册</p>
+          <h2>{{ t('register.createAccount') }}</h2>
+          <p>{{ t('register.createAccountDesc') }}</p>
         </div>
 
         <div v-if="error" class="error-message">
@@ -180,7 +182,7 @@ const handleRegister = async () => {
               <input 
                 v-model="username" 
                 type="text" 
-                placeholder="请输入用户名（3-20个字符）"
+                :placeholder="t('register.usernamePlaceholder')"
                 required
               />
             </div>
@@ -195,7 +197,7 @@ const handleRegister = async () => {
               <input 
                 v-model="password" 
                 type="password" 
-                placeholder="请输入密码（至少6个字符）"
+                :placeholder="t('register.passwordPlaceholder')"
                 required
               />
             </div>
@@ -212,19 +214,19 @@ const handleRegister = async () => {
               <input 
                 v-model="confirmPassword" 
                 type="password" 
-                placeholder="请再次输入密码"
+                :placeholder="t('register.confirmPasswordPlaceholder')"
                 required
               />
             </div>
           </div>
 
           <button type="submit" class="submit-btn" :disabled="loading">
-            {{ loading ? '注册中...' : '注册' }}
+            {{ loading ? t('register.registering') : t('register.registerBtn') }}
           </button>
 
           <div class="form-footer">
-            <span>已有账户？</span>
-            <router-link to="/login" class="link-btn">立即登录</router-link>
+            <span>{{ t('register.hasAccount') }}</span>
+            <router-link to="/login" class="link-btn">{{ t('register.loginNow') }}</router-link>
           </div>
         </form>
       </div>

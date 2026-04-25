@@ -1,5 +1,8 @@
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -8,18 +11,25 @@ const props = defineProps({
   }
 })
 
-const activeTrendTab = ref('月趋势')
+const activeTrendTab = ref('monthly')
 const highlightedCategory = ref(null)
 const highlightedBorrowType = ref(null)
 const highlightedReaderActivity = ref(null)
+const selectedYear = ref(new Date().getFullYear())
+const showYearDropdown = ref(false)
+const dataFilter = ref('all')
+const showExportMenu = ref(false)
+const isExporting = ref(false)
+const lastRefreshTime = ref(new Date())
+const isRefreshing = ref(false)
 const chartLoadingStates = reactive({
-  stats: true,
-  trend: true,
-  pie: true,
-  donut: true,
-  bar: true,
-  activity: true,
-  today: true
+  stats: false,
+  trend: false,
+  pie: false,
+  donut: false,
+  bar: false,
+  activity: false,
+  today: false
 })
 const chartErrorStates = reactive({
   stats: false,
@@ -49,25 +59,25 @@ const statsCards = computed(() => {
   const s = props.allData?.overview?.stats
   if (!s) {
     return [
-      { key: 'total_flow', label: '总流通量', value: '-', change: '-', changeType: 'up', icon: 'book', color: '#6366f1' },
-      { key: 'registered_readers', label: '注册读者', value: '-', change: '-', changeType: 'up', icon: 'users', color: '#3b82f6' },
-      { key: 'active_readers', label: '活跃读者', value: '-', change: '-', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
-      { key: 'books_in_library', label: '在馆图书', value: '-', change: '-', changeType: 'up', icon: 'archive', color: '#10b981' },
-      { key: 'borrowed_books', label: '借出量', value: '-', change: '-', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
-      { key: 'returned_books', label: '归还量', value: '-', change: '-', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
-      { key: 'library_visits', label: '到馆续借', value: '-', change: '-', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
-      { key: 'online_renewals', label: '网上续借', value: '-', change: '-', changeType: 'up', icon: 'wifi', color: '#6366f1' }
+      { key: 'total_flow', label: t('overview.totalFlow'), value: '-', change: '-', changeType: 'up', icon: 'book', color: '#6366f1' },
+      { key: 'registered_readers', label: t('overview.registeredReaders'), value: '-', change: '-', changeType: 'up', icon: 'users', color: '#3b82f6' },
+      { key: 'active_readers', label: t('overview.activeReaders'), value: '-', change: '-', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
+      { key: 'books_in_library', label: t('overview.booksInLibrary'), value: '-', change: '-', changeType: 'up', icon: 'archive', color: '#10b981' },
+      { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
+      { key: 'returned_books', label: t('overview.returnedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
+      { key: 'library_visits', label: t('overview.libraryRenewals'), value: '-', change: '-', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
+      { key: 'online_renewals', label: t('overview.onlineRenewals'), value: '-', change: '-', changeType: 'up', icon: 'wifi', color: '#6366f1' }
     ]
   }
   return [
-    { key: 'total_flow', label: '总流通量', value: formatNumber(s.total_borrows || 0), change: '+12.5%', changeType: 'up', icon: 'book', color: '#6366f1' },
-    { key: 'registered_readers', label: '注册读者', value: formatNumber(s.total_readers || 0), change: '+8.2%', changeType: 'up', icon: 'users', color: '#3b82f6' },
-    { key: 'active_readers', label: '活跃读者', value: formatNumber(s.active_readers || 0), change: '+15.3%', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
-    { key: 'books_in_library', label: '在馆图书', value: formatNumber(s.total_books || 0), change: '+6.7%', changeType: 'up', icon: 'archive', color: '#10b981' },
-    { key: 'borrowed_books', label: '借出量', value: formatNumber(s.cko_count || 0), change: '+10.1%', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
-    { key: 'returned_books', label: '归还量', value: formatNumber(s.cki_count || 0), change: '+9.3%', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
-    { key: 'library_visits', label: '到馆续借', value: formatNumber(s.reh_count || 0), change: '+6.8%', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
-    { key: 'online_renewals', label: '网上续借', value: formatNumber(s.rei_count || 0), change: '+18.2%', changeType: 'up', icon: 'wifi', color: '#6366f1' }
+    { key: 'total_flow', label: t('overview.totalFlow'), value: formatNumber(s.total_borrows || 0), change: '+12.5%', changeType: 'up', icon: 'book', color: '#6366f1' },
+    { key: 'registered_readers', label: t('overview.registeredReaders'), value: formatNumber(s.total_readers || 0), change: '+8.2%', changeType: 'up', icon: 'users', color: '#3b82f6' },
+    { key: 'active_readers', label: t('overview.activeReaders'), value: formatNumber(s.active_readers || 0), change: '+15.3%', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
+    { key: 'books_in_library', label: t('overview.booksInLibrary'), value: formatNumber(s.total_books || 0), change: '+6.7%', changeType: 'up', icon: 'archive', color: '#10b981' },
+    { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: formatNumber(s.cko_count || 0), change: '+10.1%', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
+    { key: 'returned_books', label: t('overview.returnedBooks'), value: formatNumber(s.cki_count || 0), change: '+9.3%', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
+    { key: 'library_visits', label: t('overview.libraryRenewals'), value: formatNumber(s.reh_count || 0), change: '+6.8%', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
+    { key: 'online_renewals', label: t('overview.onlineRenewals'), value: formatNumber(s.rei_count || 0), change: '+18.2%', changeType: 'up', icon: 'wifi', color: '#6366f1' }
   ]
 })
 
@@ -77,31 +87,44 @@ const categoryData = computed(() => {
   const cats = props.allData?.books?.categories
   if (!cats || !cats.length) {
     return [
-      { name: '文学类', value: 0, percent: 0, color: '#818cf8' },
-      { name: '社会科学类', value: 0, percent: 0, color: '#6366f1' },
-      { name: '工程技术类', value: 0, percent: 0, color: '#a78bfa' },
-      { name: '自然科学类', value: 0, percent: 0, color: '#06b6d4' },
-      { name: '人文类', value: 0, percent: 0, color: '#10b981' },
-      { name: '宗教类', value: 0, percent: 0, color: '#f59e0b' },
-      { name: '综合类', value: 0, percent: 0, color: '#ec4899' }
+      { name: t('overview.literature'), value: 0, percent: 0, color: '#818cf8' },
+      { name: t('overview.socialScience'), value: 0, percent: 0, color: '#6366f1' },
+      { name: t('overview.engineering'), value: 0, percent: 0, color: '#a78bfa' },
+      { name: t('overview.naturalScience'), value: 0, percent: 0, color: '#06b6d4' },
+      { name: t('overview.humanities'), value: 0, percent: 0, color: '#10b981' },
+      { name: t('overview.religion'), value: 0, percent: 0, color: '#f59e0b' },
+      { name: t('overview.comprehensive'), value: 0, percent: 0, color: '#ec4899' }
     ]
   }
-  return cats.map((c, i) => ({
+  const top = cats.slice(0, 10)
+  const rest = cats.slice(10)
+  const restTotal = rest.reduce((s, c) => s + (c.count || 0), 0)
+  const restPercent = rest.reduce((s, c) => s + (c.percent || 0), 0)
+  const result = top.map((c, i) => ({
     name: c.name,
     value: c.count || 0,
     percent: c.percent || 0,
     color: categoryColors[i % categoryColors.length]
   }))
+  if (restTotal > 0) {
+    result.push({
+      name: t('overview.other') || '其他',
+      value: restTotal,
+      percent: Math.round(restPercent * 10) / 10,
+      color: categoryColors[10 % categoryColors.length]
+    })
+  }
+  return result
 })
 
 const borrowTypeData = computed(() => {
   const actions = props.allData?.borrows?.actionStats
   if (!actions || !actions.length) {
     return [
-      { name: '借出', percent: 38.1, color: '#6366f1' },
-      { name: '归还', percent: 26.8, color: '#818cf8' },
-      { name: '到馆续借', percent: 13.3, color: '#06b6d4' },
-      { name: '网上续借', percent: 7.4, color: '#10b981' }
+      { name: t('overview.checkout'), percent: 38.1, color: '#6366f1' },
+      { name: t('overview.return'), percent: 26.8, color: '#818cf8' },
+      { name: t('overview.libraryRenewal'), percent: 13.3, color: '#06b6d4' },
+      { name: t('overview.onlineRenewal'), percent: 7.4, color: '#10b981' }
     ]
   }
   return actions.map((a, i) => ({
@@ -128,10 +151,10 @@ const trendData = computed(() => {
   const trend = props.allData?.readers?.monthlyTrend
   if (!trend || !trend.length) {
     return [
-      { month: '1月', value: 0 }, { month: '2月', value: 0 }, { month: '3月', value: 0 },
-      { month: '4月', value: 0 }, { month: '5月', value: 0 }, { month: '6月', value: 0 },
-      { month: '7月', value: 0 }, { month: '8月', value: 0 }, { month: '9月', value: 0 },
-      { month: '10月', value: 0 }, { month: '11月', value: 0 }, { month: '12月', value: 0 }
+      { month: t('months.jan'), value: 0 }, { month: t('months.feb'), value: 0 }, { month: t('months.mar'), value: 0 },
+      { month: t('months.apr'), value: 0 }, { month: t('months.may'), value: 0 }, { month: t('months.jun'), value: 0 },
+      { month: t('months.jul'), value: 0 }, { month: t('months.aug'), value: 0 }, { month: t('months.sep'), value: 0 },
+      { month: t('months.oct'), value: 0 }, { month: t('months.nov'), value: 0 }, { month: t('months.dec'), value: 0 }
     ]
   }
   return trend.map(t => ({
@@ -144,14 +167,14 @@ const readerActivityData = computed(() => {
   const types = props.allData?.readers?.readerTypes
   if (!types || !types.length) {
     return [
-      { name: '本科', value: 35.1, color: '#06b6d4' },
-      { name: '研究生', value: 16.6, color: '#8b5cf6' },
-      { name: '大专', value: 15.2, color: '#10b981' },
-      { name: '高中', value: 13.0, color: '#f59e0b' },
-      { name: '临时', value: 9.4, color: '#ef4444' },
-      { name: '小学', value: 5.9, color: '#6366f1' },
-      { name: '学龄前', value: 2.6, color: '#3b82f6' },
-      { name: '初中', value: 2.3, color: '#818cf8' }
+      { name: t('degree.bachelor'), value: 35.1, color: '#06b6d4' },
+      { name: t('degree.graduate'), value: 16.6, color: '#8b5cf6' },
+      { name: t('degree.college'), value: 15.2, color: '#10b981' },
+      { name: t('degree.highSchool'), value: 13.0, color: '#f59e0b' },
+      { name: t('degree.temporary'), value: 9.4, color: '#ef4444' },
+      { name: t('degree.primary'), value: 5.9, color: '#6366f1' },
+      { name: t('degree.preschool'), value: 2.6, color: '#3b82f6' },
+      { name: t('degree.middleSchool'), value: 2.3, color: '#818cf8' }
     ]
   }
   const activityColors = ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#3b82f6', '#818cf8']
@@ -165,9 +188,9 @@ const readerActivityData = computed(() => {
 const todayStats = computed(() => {
   const s = props.allData?.overview?.stats
   return {
-    visitors: formatNumber(s?.today_visits || 0) + ' 人',
-    borrows: formatNumber(s?.cko_count || 0) + ' 册',
-    returns: formatNumber(s?.cki_count || 0) + ' 部'
+    visitors: formatNumber(s?.today_visits || 0) + ' ' + t('common.people'),
+    borrows: formatNumber(s?.cko_count || 0) + ' ' + t('common.volume'),
+    returns: formatNumber(s?.cki_count || 0) + ' ' + t('common.unit')
   }
 })
 
@@ -352,18 +375,134 @@ const getActivitySliceOpacity = (idx) => {
   return highlightedReaderActivity.value === readerActivityData.value[idx].name ? 1 : 0.35
 }
 
-const isInitialLoad = ref(true)
+const isTrendEmpty = computed(() => {
+  const data = trendData.value
+  return !data || data.length === 0 || data.every(d => d.value === 0)
+})
 
-const simulateChartLoad = () => {
-  const delays = { stats: 80, trend: 150, pie: 200, donut: 250, bar: 300, activity: 350, today: 120 }
-  Object.keys(delays).forEach(key => {
-    if (isInitialLoad.value) {
-      chartLoadingStates[key] = true
-    }
-    setTimeout(() => {
-      chartLoadingStates[key] = false
-    }, delays[key])
+const isCategoryEmpty = computed(() => {
+  const data = categoryData.value
+  return !data || data.length === 0 || data.every(d => d.value === 0)
+})
+
+const isBorrowTypeEmpty = computed(() => {
+  const data = borrowTypeData.value
+  return !data || data.length === 0 || data.every(d => d.percent === 0)
+})
+
+const isReaderActivityEmpty = computed(() => {
+  const data = readerActivityData.value
+  return !data || data.length === 0 || data.every(d => d.value === 0)
+})
+
+const isTopCategoryEmpty = computed(() => {
+  const data = topCategoriesData.value
+  return !data || data.length === 0
+})
+
+const isStatsEmpty = computed(() => {
+  const s = props.allData?.overview?.stats
+  if (!s) return true
+  return !s.total_borrows && !s.total_readers && !s.total_books
+})
+
+const yearOptions = computed(() => {
+  const current = new Date().getFullYear()
+  return [current, current - 1, current - 2, current - 3, current - 4]
+})
+
+const filterOptions = computed(() => [
+  { key: 'all', label: t('overview.filterAll') },
+  { key: 'borrow', label: t('overview.filterBorrow') },
+  { key: 'reader', label: t('overview.filterReader') },
+  { key: 'book', label: t('overview.filterBook') }
+])
+
+const handleRefresh = () => {
+  isRefreshing.value = true
+  lastRefreshTime.value = new Date()
+  Object.keys(chartLoadingStates).forEach(key => {
+    chartLoadingStates[key] = true
   })
+  setTimeout(() => {
+    updateChartStates()
+    isRefreshing.value = false
+  }, 800)
+}
+
+const handleExportData = (format) => {
+  showExportMenu.value = false
+  isExporting.value = true
+  setTimeout(() => {
+    if (format === 'csv') {
+      exportCSV()
+    } else if (format === 'json') {
+      exportJSON()
+    }
+    isExporting.value = false
+  }, 500)
+}
+
+const exportCSV = () => {
+  const s = props.allData?.overview?.stats
+  const rows = []
+  rows.push(t('overview.exportStatsTitle'))
+  if (s) {
+    rows.push(`${t('overview.totalFlow')},${s.total_borrows || 0}`)
+    rows.push(`${t('overview.registeredReaders')},${s.total_readers || 0}`)
+    rows.push(`${t('overview.activeReaders')},${s.active_readers || 0}`)
+    rows.push(`${t('overview.booksInLibrary')},${s.total_books || 0}`)
+    rows.push(`${t('overview.borrowedBooks')},${s.cko_count || 0}`)
+    rows.push(`${t('overview.returnedBooks')},${s.cki_count || 0}`)
+  }
+  rows.push('')
+  rows.push(t('overview.exportCategoryTitle'))
+  categoryData.value.forEach(c => {
+    rows.push(`${c.name},${c.value},${c.percent}%`)
+  })
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `library_overview_${selectedYear.value}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportJSON = () => {
+  const data = {
+    year: selectedYear.value,
+    exportedAt: new Date().toISOString(),
+    stats: props.allData?.overview?.stats || {},
+    categories: categoryData.value,
+    borrowTypes: borrowTypeData.value,
+    readerActivity: readerActivityData.value,
+    trend: trendData.value
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `library_overview_${selectedYear.value}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const selectYear = (year) => {
+  selectedYear.value = year
+  showYearDropdown.value = false
+  handleRefresh()
+}
+
+const updateChartStates = () => {
+  const d = props.allData
+  chartLoadingStates.stats = !d?.overview?.stats
+  chartLoadingStates.trend = !d?.readers?.monthlyTrend
+  chartLoadingStates.pie = !d?.books?.categories
+  chartLoadingStates.donut = !d?.borrows?.actionStats
+  chartLoadingStates.bar = !d?.books?.categories
+  chartLoadingStates.activity = !d?.readers?.readerTypes
+  chartLoadingStates.today = !d?.overview?.stats
 }
 
 const retryChart = (key) => {
@@ -371,27 +510,97 @@ const retryChart = (key) => {
   chartLoadingStates[key] = true
   chartRetryCount[key]++
   setTimeout(() => {
-    chartLoadingStates[key] = false
+    updateChartStates()
   }, 800)
 }
 
 watch(() => props.allData, (newVal) => {
   if (newVal) {
-    simulateChartLoad()
-    nextTick(() => {
-      isInitialLoad.value = false
-    })
+    updateChartStates()
   }
 }, { immediate: true, deep: true })
+
+const handleClickOutside = (e) => {
+  if (showYearDropdown.value && !e.target.closest('.toolbar-year')) {
+    showYearDropdown.value = false
+  }
+  if (showExportMenu.value && !e.target.closest('.toolbar-export')) {
+    showExportMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <template>
   <div class="overview-container">
-    <div class="stats-cards-grid">
+    <div class="overview-toolbar">
+      <div class="toolbar-left">
+        <div class="toolbar-filter">
+          <button
+            v-for="opt in filterOptions"
+            :key="opt.key"
+            class="filter-btn"
+            :class="{ active: dataFilter === opt.key }"
+            @click="dataFilter = opt.key"
+          >{{ opt.label }}</button>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <div class="toolbar-year" :class="{ open: showYearDropdown }">
+          <button class="year-btn" @click="showYearDropdown = !showYearDropdown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>{{ selectedYear }}{{ t('common.year') }}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" class="dropdown-arrow"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <transition name="dropdown">
+            <div v-if="showYearDropdown" class="year-dropdown">
+              <button
+                v-for="year in yearOptions"
+                :key="year"
+                class="year-option"
+                :class="{ active: selectedYear === year }"
+                @click="selectYear(year)"
+              >{{ year }}{{ t('common.year') }}</button>
+            </div>
+          </transition>
+        </div>
+        <button class="toolbar-btn" :class="{ spinning: isRefreshing }" @click="handleRefresh" :title="t('common.refresh')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <div class="toolbar-export" :class="{ open: showExportMenu }">
+          <button class="toolbar-btn" @click="showExportMenu = !showExportMenu" :title="t('overview.exportData')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <transition name="dropdown">
+            <div v-if="showExportMenu" class="export-dropdown">
+              <button class="export-option" @click="handleExportData('csv')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                CSV
+              </button>
+              <button class="export-option" @click="handleExportData('json')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                JSON
+              </button>
+            </div>
+          </transition>
+        </div>
+        <span class="toolbar-time">{{ lastRefreshTime.toLocaleTimeString() }}</span>
+      </div>
+    </div>
+
+    <div v-if="dataFilter === 'all' || dataFilter === 'borrow'" class="stats-cards-grid">
       <div
         v-for="(card, index) in statsCards"
         :key="card.key"
         class="stat-card"
+        :class="{ 'stat-card-empty': card.value === '-' }"
         :style="{ '--card-color': card.color, '--delay': (index * 0.05) + 's' }"
       >
         <div v-if="chartLoadingStates.stats" class="chart-skeleton skeleton-pulse"></div>
@@ -446,28 +655,33 @@ watch(() => props.allData, (newVal) => {
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
                 <polyline points="17 6 23 6 23 12"/>
               </svg>
-              <span>较去年 {{ card.change }}</span>
+              <span>{{ t('common.comparedToLastYear') }} {{ card.change }}</span>
             </div>
           </div>
         </template>
       </div>
     </div>
 
-    <div class="charts-row-primary">
+    <div v-if="dataFilter === 'all' || dataFilter === 'borrow'" class="charts-row-primary">
       <div class="chart-card trend-chart-card" :class="{ 'chart-loading': chartLoadingStates.trend }">
         <div class="trend-header">
-          <h3 class="chart-title">借阅趋势分析</h3>
+          <h3 class="chart-title">{{ t('overview.trendAnalysis') }}</h3>
           <div class="trend-tabs">
             <button
-              v-for="tab in ['日趋势', '周趋势', '月趋势', '年趋势']"
-              :key="tab"
+              v-for="tab in [
+                { key: 'daily', label: t('overview.dailyTrend') },
+                { key: 'weekly', label: t('overview.weeklyTrend') },
+                { key: 'monthly', label: t('overview.monthlyTrend') },
+                { key: 'yearly', label: t('overview.yearlyTrend') }
+              ]"
+              :key="tab.key"
               class="trend-tab"
-              :class="{ active: activeTrendTab === tab }"
-              @click="activeTrendTab = tab"
-            >{{ tab }}</button>
+              :class="{ active: activeTrendTab === tab.key }"
+              @click="activeTrendTab = tab.key"
+            >{{ tab.label }}</button>
           </div>
           <div class="year-selector">
-            <span>2026年</span>
+            <span>2026{{ t('common.year') }}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -480,8 +694,13 @@ watch(() => props.allData, (newVal) => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
-          <span>加载失败</span>
-          <button class="retry-btn" @click="retryChart('trend')">重试</button>
+          <span>{{ t('common.loadFailed') }}</span>
+          <button class="retry-btn" @click="retryChart('trend')">{{ t('common.retry') }}</button>
+        </div>
+        <div v-else-if="isTrendEmpty" class="chart-empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span class="empty-title">{{ t('overview.noTrendData') }}</span>
+          <span class="empty-desc">{{ t('overview.noTrendDataDesc') }}</span>
         </div>
         <div v-else class="chart-content trend-content">
           <svg viewBox="0 0 800 280" class="trend-svg" preserveAspectRatio="xMidYMid meet">
@@ -520,7 +739,7 @@ watch(() => props.allData, (newVal) => {
                 :font-size="hoveredTrendPoint === idx ? 13 : 10"
                 :font-weight="hoveredTrendPoint === idx ? 700 : 400"
                 :fill="hoveredTrendPoint === idx ? '#6366f1' : '#94a3b8'"
-              >{{ trendData[idx]?.value || 0 }}千</text>
+              >{{ trendData[idx]?.value || 0 }}{{ t('common.thousand') }}</text>
             </g>
             <g v-for="(item, idx) in trendData" :key="'label-' + idx">
               <text :x="40 + (idx / (trendData.length - 1)) * 720" y="270" text-anchor="middle" font-size="11" fill="#94a3b8">{{ item.month }}</text>
@@ -529,9 +748,9 @@ watch(() => props.allData, (newVal) => {
         </div>
       </div>
 
-      <div class="primary-side-column">
+      <div v-if="dataFilter === 'all' || dataFilter === 'reader'" class="primary-side-column">
         <div class="chart-card activity-chart-card" :class="{ 'chart-loading': chartLoadingStates.activity }">
-          <h3 class="chart-title">读者学历分布</h3>
+          <h3 class="chart-title">{{ t('overview.readerEducation') }}</h3>
           <div v-if="chartLoadingStates.activity" class="chart-loading-state">
             <div class="chart-skeleton-chart skeleton-pulse"></div>
           </div>
@@ -539,8 +758,13 @@ watch(() => props.allData, (newVal) => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
               <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
-            <span>加载失败</span>
-            <button class="retry-btn" @click="retryChart('activity')">重试</button>
+            <span>{{ t('common.loadFailed') }}</span>
+            <button class="retry-btn" @click="retryChart('activity')">{{ t('common.retry') }}</button>
+          </div>
+          <div v-else-if="isReaderActivityEmpty" class="chart-empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="empty-title">{{ t('overview.noReaderData') }}</span>
+            <span class="empty-desc">{{ t('overview.noReaderDataDesc') }}</span>
           </div>
           <div v-else class="chart-content activity-content">
             <svg viewBox="0 0 200 200" class="activity-donut-svg">
@@ -557,7 +781,7 @@ watch(() => props.allData, (newVal) => {
                   @mouseleave="onReaderActivityLeave"
                 />
                 <text x="0" y="-5" text-anchor="middle" font-size="22" font-weight="700" fill="#1e293b">{{ totalReadersCount }}</text>
-                <text x="0" y="14" text-anchor="middle" font-size="10" fill="#64748b">读者总数</text>
+                <text x="0" y="14" text-anchor="middle" font-size="10" fill="#64748b">{{ t('overview.totalReaders') }}</text>
               </g>
             </svg>
             <div class="activity-legend">
@@ -582,7 +806,7 @@ watch(() => props.allData, (newVal) => {
             <div class="chart-skeleton-chart skeleton-pulse" style="height: 120px"></div>
           </div>
           <template v-else>
-            <h3 class="today-title">今日概况</h3>
+            <h3 class="today-title">{{ t('overview.todaySummary') }}</h3>
             <div class="today-mini-chart">
               <svg viewBox="0 0 200 80" class="mini-line-chart" preserveAspectRatio="xMidYMid meet">
                 <polyline
@@ -597,15 +821,15 @@ watch(() => props.allData, (newVal) => {
             </div>
             <div class="today-stats-list">
               <div class="today-stat-item">
-                <span class="today-label">今日到馆</span>
+                <span class="today-label">{{ t('overview.todayVisits') }}</span>
                 <span class="today-value">{{ todayStats.visitors }}</span>
               </div>
               <div class="today-stat-item">
-                <span class="today-label">今日借书</span>
+                <span class="today-label">{{ t('overview.todayBorrows') }}</span>
                 <span class="today-value">{{ todayStats.borrows }}</span>
               </div>
               <div class="today-stat-item">
-                <span class="today-label">今日还书</span>
+                <span class="today-label">{{ t('overview.todayReturns') }}</span>
                 <span class="today-value">{{ todayStats.returns }}</span>
               </div>
             </div>
@@ -614,10 +838,10 @@ watch(() => props.allData, (newVal) => {
       </div>
     </div>
 
-    <div class="charts-row-secondary">
+    <div v-if="dataFilter === 'all' || dataFilter === 'book'" class="charts-row-secondary">
       <div class="chart-card pie-chart-card" :class="{ 'chart-loading': chartLoadingStates.pie }">
         <h3 class="chart-title">
-          借阅分类分布
+          {{ t('overview.categoryDistribution') }}
           <span v-if="highlightedCategory" class="chart-filter-badge">
             {{ highlightedCategory }}
             <button class="filter-clear" @click="highlightedCategory = null">✕</button>
@@ -630,8 +854,13 @@ watch(() => props.allData, (newVal) => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
-          <span>加载失败</span>
-          <button class="retry-btn" @click="retryChart('pie')">重试</button>
+          <span>{{ t('common.loadFailed') }}</span>
+          <button class="retry-btn" @click="retryChart('pie')">{{ t('common.retry') }}</button>
+        </div>
+        <div v-else-if="isCategoryEmpty" class="chart-empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span class="empty-title">{{ t('overview.noCategoryData') }}</span>
+          <span class="empty-desc">{{ t('overview.noCategoryDataDesc') }}</span>
         </div>
         <div v-else class="chart-content">
           <svg viewBox="0 0 320 260" class="pie-svg" preserveAspectRatio="xMidYMid meet">
@@ -652,7 +881,7 @@ watch(() => props.allData, (newVal) => {
               />
               <circle cx="0" cy="0" r="50" fill="white"/>
               <text x="0" y="-8" text-anchor="middle" font-size="22" font-weight="700" fill="#1e293b">{{ totalCategoryBorrows }}</text>
-              <text x="0" y="14" text-anchor="middle" font-size="11" fill="#64748b">分类总借阅量</text>
+              <text x="0" y="14" text-anchor="middle" font-size="11" fill="#64748b">{{ t('overview.totalCategoryBorrows') }}</text>
             </g>
           </svg>
           <div class="pie-legend">
@@ -675,7 +904,7 @@ watch(() => props.allData, (newVal) => {
       </div>
 
       <div class="chart-card donut-chart-card" :class="{ 'chart-loading': chartLoadingStates.donut }">
-        <h3 class="chart-title">借阅类型占比</h3>
+        <h3 class="chart-title">{{ t('overview.borrowTypeRatio') }}</h3>
         <div v-if="chartLoadingStates.donut" class="chart-loading-state">
           <div class="chart-skeleton-chart skeleton-pulse"></div>
         </div>
@@ -683,8 +912,13 @@ watch(() => props.allData, (newVal) => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
-          <span>加载失败</span>
-          <button class="retry-btn" @click="retryChart('donut')">重试</button>
+          <span>{{ t('common.loadFailed') }}</span>
+          <button class="retry-btn" @click="retryChart('donut')">{{ t('common.retry') }}</button>
+        </div>
+        <div v-else-if="isBorrowTypeEmpty" class="chart-empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span class="empty-title">{{ t('overview.noBorrowTypeData') }}</span>
+          <span class="empty-desc">{{ t('overview.noBorrowTypeDataDesc') }}</span>
         </div>
         <div v-else class="chart-content donut-content">
           <svg viewBox="0 0 220 220" class="donut-svg" preserveAspectRatio="xMidYMid meet">
@@ -701,7 +935,7 @@ watch(() => props.allData, (newVal) => {
                 @mouseleave="onBorrowTypeLeave"
               />
               <text x="0" y="-5" text-anchor="middle" font-size="28" font-weight="700" fill="#1e293b">{{ borrowTypeData[0]?.percent || 0 }}%</text>
-              <text x="0" y="16" text-anchor="middle" font-size="12" fill="#64748b">{{ borrowTypeData[0]?.name || '最大占比' }}</text>
+              <text x="0" y="16" text-anchor="middle" font-size="12" fill="#64748b">{{ borrowTypeData[0]?.name || t('overview.largestShare') }}</text>
             </g>
           </svg>
           <div class="donut-legend">
@@ -723,7 +957,7 @@ watch(() => props.allData, (newVal) => {
 
       <div class="chart-card bar-chart-card" :class="{ 'chart-loading': chartLoadingStates.bar }">
         <h3 class="chart-title">
-          Top 10 借阅分类占比
+          {{ t('overview.topCategories') }}
           <span v-if="highlightedCategory" class="chart-filter-badge">
             {{ highlightedCategory }}
             <button class="filter-clear" @click="highlightedCategory = null">✕</button>
@@ -736,8 +970,13 @@ watch(() => props.allData, (newVal) => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
-          <span>加载失败</span>
-          <button class="retry-btn" @click="retryChart('bar')">重试</button>
+          <span>{{ t('common.loadFailed') }}</span>
+          <button class="retry-btn" @click="retryChart('bar')">{{ t('common.retry') }}</button>
+        </div>
+        <div v-else-if="isTopCategoryEmpty" class="chart-empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span class="empty-title">{{ t('overview.noTopCategoryData') }}</span>
+          <span class="empty-desc">{{ t('overview.noTopCategoryDataDesc') }}</span>
         </div>
         <div v-else class="chart-content bar-content">
           <div

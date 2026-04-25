@@ -1,11 +1,14 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { bookApi } from '@/api/books'
 import { formatNumber } from '@/utils/format'
 import { BOOK_STAT_CARDS } from '@/constants'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import CategoryList from '@/components/CategoryList.vue'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -46,7 +49,7 @@ const fetchBookData = async () => {
     if (data.categories) categories.value = data.categories
     if (data.hotBooks) hotBooks.value = data.hotBooks
   } catch (e) {
-    console.error('获取数据失败', e)
+    console.error('Failed to fetch book data', e)
   } finally {
     loading.value = false
   }
@@ -57,7 +60,7 @@ const fetchCategoriesList = async () => {
     const res = await bookApi.getCategoriesList()
     if (res.ok) categoriesList.value = await res.json()
   } catch (e) {
-    console.error('获取分类列表失败', e)
+    console.error('Failed to fetch categories', e)
   }
 }
 
@@ -74,7 +77,7 @@ const performSearch = async (page = 1) => {
       searchTotalPages.value = data.total_pages
     }
   } catch (e) {
-    console.error('检索失败', e)
+    console.error('Search failed', e)
   } finally {
     searchLoading.value = false
   }
@@ -115,13 +118,13 @@ onMounted(() => {
 
 <template>
   <div class="books">
-    <PageHeader title="图书管理" description="馆藏图书数据统计" :loading="loading" @refresh="fetchBookData" />
+    <PageHeader :title="t('book.title')" :description="t('book.desc')" :loading="loading" @refresh="fetchBookData" />
 
     <LoadingSpinner :loading="loading">
       <div class="stats-grid">
         <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ formatNumber(bookStats[card.key]) }}</span>
           </div>
           <div class="stat-glow"></div>
@@ -136,7 +139,7 @@ onMounted(() => {
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
               </svg>
             </span>
-            分类占比
+            {{ t('book.categoryRatio') }}
           </h3>
         </div>
         <CategoryList :items="categories" />
@@ -150,16 +153,16 @@ onMounted(() => {
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
             </span>
-            热门图书 TOP 20
+            {{ t('book.hotBooks') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>排名</th>
-              <th>图书名称</th>
-              <th>分类</th>
-              <th>借阅次数</th>
+              <th>{{ t('book.rank') }}</th>
+              <th>{{ t('book.name') }}</th>
+              <th>{{ t('book.category') }}</th>
+              <th>{{ t('book.borrowCount') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -169,7 +172,7 @@ onMounted(() => {
               </td>
               <td class="name-cell">{{ book.name }}</td>
               <td><span class="category-tag">{{ book.category }}</span></td>
-              <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">次</span></td>
+              <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">{{ t('common.times') }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -184,25 +187,25 @@ onMounted(() => {
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </span>
-            图书检索
+            {{ t('book.search') }}
           </h3>
         </div>
 
         <div class="search-form">
           <div class="search-inputs">
             <div class="input-group">
-              <label>关键词</label>
+              <label>{{ t('book.searchPlaceholder') }}</label>
               <input
                 v-model="searchKeyword"
                 type="text"
-                placeholder="输入图书名称或关键词"
+                :placeholder="t('book.searchPlaceholder')"
                 @keyup.enter="performSearch(1)"
               />
             </div>
             <div class="input-group">
-              <label>分类</label>
+              <label>{{ t('book.category') }}</label>
               <select v-model="searchCategory">
-                <option value="">全部分类</option>
+                <option value="">{{ t('book.allCategories') }}</option>
                 <option v-for="cat in categoriesList" :key="cat" :value="cat">{{ cat }}</option>
               </select>
             </div>
@@ -213,15 +216,15 @@ onMounted(() => {
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <span>{{ searchLoading ? '检索中...' : '检索' }}</span>
+              <span>{{ searchLoading ? t('common.searching') : t('common.search') }}</span>
             </button>
-            <button class="reset-btn" @click="resetSearch">重置</button>
+            <button class="reset-btn" @click="resetSearch">{{ t('book.resetBtn') }}</button>
           </div>
         </div>
 
         <div v-if="hasSearched" class="search-results">
           <div class="results-header">
-            <span class="results-count">共找到 {{ searchTotal }} 条结果</span>
+            <span class="results-count">{{ t('common.total') }} {{ searchTotal }} {{ t('common.found') }}</span>
           </div>
 
           <div v-if="searchResults.length === 0" class="no-results">
@@ -231,17 +234,17 @@ onMounted(() => {
               <line x1="8" y1="8" x2="14" y2="14"/>
               <line x1="14" y1="8" x2="8" y2="14"/>
             </svg>
-            <p>未找到匹配的图书</p>
-            <span>请尝试其他关键词或分类</span>
+            <p>{{ t('common.noResults') }}</p>
+            <span>{{ t('common.noResultsDesc') }}</span>
           </div>
 
           <table v-else class="data-table">
             <thead>
               <tr>
-                <th>图书 ID</th>
-                <th>图书名称</th>
-                <th>分类</th>
-                <th>借阅次数</th>
+                <th>{{ t('borrow.bookId') }}</th>
+                <th>{{ t('book.name') }}</th>
+                <th>{{ t('book.category') }}</th>
+                <th>{{ t('book.borrowCount') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -249,7 +252,7 @@ onMounted(() => {
                 <td class="id-cell">#{{ book.bib_id }}</td>
                 <td class="name-cell">{{ book.name }}</td>
                 <td><span class="category-tag">{{ book.category }}</span></td>
-                <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">次</span></td>
+                <td class="count-cell">{{ formatNumber(book.borrow_count) }} <span class="unit">{{ t('common.times') }}</span></td>
               </tr>
             </tbody>
           </table>
@@ -260,15 +263,15 @@ onMounted(() => {
               :disabled="searchPage === 1"
               @click="goToPage(searchPage - 1)"
             >
-              上一页
+              {{ t('common.prev') }}
             </button>
-            <span class="page-info">第 {{ searchPage }} / {{ searchTotalPages }} 页</span>
+            <span class="page-info">{{ t('common.page') }} {{ searchPage }} / {{ searchTotalPages }} {{ t('common.pageOf') }}</span>
             <button
               class="page-btn"
               :disabled="searchPage === searchTotalPages"
               @click="goToPage(searchPage + 1)"
             >
-              下一页
+              {{ t('common.next') }}
             </button>
           </div>
         </div>

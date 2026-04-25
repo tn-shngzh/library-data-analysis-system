@@ -6,16 +6,20 @@ export const overviewApi = {
   getRecentBooks: () => get('/api/overview/recent-books'),
 
   getAll: async () => {
-    const [statsRes, catRes, recentRes] = await Promise.all([
-      overviewApi.getStats(),
-      overviewApi.getCategories(),
-      overviewApi.getRecentBooks()
-    ])
-
     const result = {}
-    if (statsRes.ok) result.stats = await statsRes.json()
-    if (catRes.ok) result.categories = await catRes.json()
-    if (recentRes.ok) result.recentBooks = await recentRes.json()
+    const calls = [
+      ['stats', overviewApi.getStats],
+      ['categories', overviewApi.getCategories],
+      ['recentBooks', overviewApi.getRecentBooks]
+    ]
+    const responses = await Promise.allSettled(calls.map(([, fn]) => fn()))
+    for (let i = 0; i < calls.length; i++) {
+      const [key] = calls[i]
+      const res = responses[i]
+      if (res.status === 'fulfilled' && res.value.ok) {
+        result[key] = await res.value.json()
+      }
+    }
     return result
   }
 }

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { libraryApi } from '@/api/library'
 import { useAuth } from '@/composables/useAuth'
 import { useTime } from '@/composables/useTime'
@@ -8,6 +9,7 @@ import { useDropdown } from '@/composables/useDropdown'
 import { useSearch } from '@/composables/useSearch'
 import { getCache, setCache } from '@/utils/cache'
 
+const { t } = useI18n()
 const router = useRouter()
 const { username, role, checkAuth, logout } = useAuth()
 const { currentTime } = useTime()
@@ -29,13 +31,13 @@ const tabs = ref([])
 
 const updateTabs = () => {
   const baseTabs = [
-    { id: 'home', label: '首页', icon: 'home' },
-    { id: 'search', label: '图书检索', icon: 'search' },
-    { id: 'hot', label: '热门图书', icon: 'fire' }
+    { id: 'home', label: t('library.tabHome'), icon: 'home' },
+    { id: 'search', label: t('library.tabSearch'), icon: 'search' },
+    { id: 'hot', label: t('library.tabHot'), icon: 'fire' }
   ]
   
   if (role.value !== 'admin') {
-    baseTabs.push({ id: 'mybooks', label: '我的借阅', icon: 'books' })
+    baseTabs.push({ id: 'mybooks', label: t('library.tabMyBooks'), icon: 'books' })
   }
   
   tabs.value = baseTabs
@@ -130,15 +132,15 @@ const handleBorrow = async (bookId) => {
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        alert('借阅成功！')
+        alert(t('library.borrowSuccess'))
         preloadData()
       }
     } else {
       const err = await res.json()
-      alert(err.detail || '借阅失败')
+      alert(err.detail || t('library.borrowFailed'))
     }
   } catch (e) {
-    alert('网络错误，请重试')
+    alert(t('library.networkError'))
   }
 }
 
@@ -168,8 +170,8 @@ onMounted(async () => {
             </svg>
           </div>
           <div class="title-group">
-            <h1>图书馆管理系统</h1>
-            <span class="subtitle">Library Management System</span>
+            <h1>{{ t('library.systemTitle') }}</h1>
+            <span class="subtitle">{{ t('library.systemSubtitle') }}</span>
           </div>
         </div>
       </div>
@@ -183,7 +185,7 @@ onMounted(async () => {
           </div>
           <div class="user-details" @click="toggleDropdown">
             <span class="user-name">{{ username }}</span>
-            <span class="user-role-badge user">用户</span>
+            <span class="user-role-badge user">{{ t('common.user') }}</span>
           </div>
           
           <transition name="dropdown">
@@ -194,7 +196,7 @@ onMounted(async () => {
                 </div>
                 <div class="dropdown-user-info">
                   <div class="dropdown-username">{{ username }}</div>
-                  <div class="dropdown-role">普通用户</div>
+                  <div class="dropdown-role">{{ t('library.normalUser') }}</div>
                 </div>
               </div>
               
@@ -206,7 +208,7 @@ onMounted(async () => {
                     <circle cx="12" cy="12" r="3"/>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                   </svg>
-                  <span>用户设置</span>
+                  <span>{{ t('library.userSettings') }}</span>
                 </div>
                 
                 <div class="dropdown-item" v-if="role !== 'admin'" @click="goToMyBooks">
@@ -214,14 +216,14 @@ onMounted(async () => {
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                   </svg>
-                  <span>我的借阅</span>
+                  <span>{{ t('library.tabMyBooks') }}</span>
                 </div>
                 
                 <div class="dropdown-item" @click="goToHotBooks">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
                     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/>
                   </svg>
-                  <span>热门图书</span>
+                  <span>{{ t('library.tabHot') }}</span>
                 </div>
               </div>
               
@@ -234,13 +236,13 @@ onMounted(async () => {
                     <polyline points="16 17 21 12 16 7"/>
                     <line x1="21" y1="12" x2="9" y2="12"/>
                   </svg>
-                  <span>退出登录</span>
+                  <span>{{ t('common.logout') }}</span>
                 </div>
               </div>
             </div>
           </transition>
           
-          <button @click="logout" class="logout-btn" title="退出登录">
+          <button @click="logout" class="logout-btn" :title="t('common.logout')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/>
@@ -281,15 +283,15 @@ onMounted(async () => {
       <main class="main-content">
         <div v-if="!dataLoaded" class="loading-overlay">
           <div class="loading-spinner"></div>
-          <span class="loading-text">正在加载数据...</span>
+          <span class="loading-text">{{ t('library.loadingData') }}</span>
         </div>
 
         <div v-else class="content-area">
           <div v-if="activeTab === 'home'" class="tab-content">
             <div class="welcome-banner">
               <div class="welcome-text">
-                <h1>欢迎回来，{{ username }}！</h1>
-                <p>今天也是充满书香的一天</p>
+                <h1>{{ t('library.welcomeBack', { name: username }) }}</h1>
+                <p>{{ t('library.welcomeDesc') }}</p>
               </div>
               <div class="welcome-decoration">
                 <svg viewBox="0 0 200 200" width="120" height="120">
@@ -310,7 +312,7 @@ onMounted(async () => {
                 </div>
                 <div class="stat-info">
                   <div class="stat-value">{{ libraryData.stats?.total_books || 0 }}</div>
-                  <div class="stat-label">馆藏总量</div>
+                  <div class="stat-label">{{ t('library.statTotalBooks') }}</div>
                 </div>
               </div>
 
@@ -322,7 +324,7 @@ onMounted(async () => {
                 </div>
                 <div class="stat-info">
                   <div class="stat-value">{{ libraryData.stats?.cko_count || 0 }}</div>
-                  <div class="stat-label">在借图书</div>
+                  <div class="stat-label">{{ t('library.statBorrowed') }}</div>
                 </div>
               </div>
 
@@ -334,7 +336,7 @@ onMounted(async () => {
                 </div>
                 <div class="stat-info">
                   <div class="stat-value">{{ libraryData.stats?.total_borrows || 0 }}</div>
-                  <div class="stat-label">总借阅次数</div>
+                  <div class="stat-label">{{ t('library.statTotalBorrows') }}</div>
                 </div>
               </div>
 
@@ -346,7 +348,7 @@ onMounted(async () => {
                 </div>
                 <div class="stat-info">
                   <div class="stat-value">{{ libraryData.categories?.length || 0 }}</div>
-                  <div class="stat-label">图书分类</div>
+                  <div class="stat-label">{{ t('library.statCategories') }}</div>
                 </div>
               </div>
             </div>
@@ -357,7 +359,7 @@ onMounted(async () => {
                   <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/>
                   </svg>
-                  热门图书
+                  {{ t('library.hotBooks') }}
                 </h3>
                 <div class="hot-books-list">
                   <div v-for="(book, index) in libraryData.hotBooks?.slice(0, 5)" :key="book.bib_id" class="hot-book-item">
@@ -366,10 +368,10 @@ onMounted(async () => {
                       <div class="hot-book-title">{{ book.name }}</div>
                       <div class="hot-book-meta">
                         <span class="hot-book-category">{{ book.category }}</span>
-                        <span class="hot-book-count">借阅 {{ book.borrow_count }} 次</span>
+                        <span class="hot-book-count">{{ t('library.borrowCount', { count: book.borrow_count }) }}</span>
                       </div>
                     </div>
-                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">借阅</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">{{ t('library.borrow') }}</button>
                   </div>
                 </div>
               </div>
@@ -379,7 +381,7 @@ onMounted(async () => {
                   <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
                   </svg>
-                  最近借阅
+                  {{ t('library.recentBorrows') }}
                 </h3>
                 <div class="recent-borrows-list">
                   <div v-for="record in libraryData.recentBorrows?.slice(0, 8)" :key="record.date + record.borrower_id" class="recent-borrow-item">
@@ -397,15 +399,15 @@ onMounted(async () => {
           <div v-if="activeTab === 'search'" class="tab-content">
             <div class="search-container">
               <div class="search-header">
-                <h2>图书检索</h2>
-                <p>输入关键词实时搜索您感兴趣的图书</p>
+                <h2>{{ t('library.searchTitle') }}</h2>
+                <p>{{ t('library.searchDesc') }}</p>
               </div>
               
               <div class="search-box">
                 <input 
                   v-model="searchKeyword" 
                   type="text" 
-                  placeholder="请输入图书名称、分类或关键词，实时搜索..."
+                  :placeholder="t('library.searchPlaceholder')"
                   class="search-input"
                 />
                 <button @click="handleSearch" class="search-button" :disabled="isSearching">
@@ -413,14 +415,14 @@ onMounted(async () => {
                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                   </svg>
                   <div v-else class="search-loading"></div>
-                  {{ isSearching ? '搜索中...' : '搜索' }}
+                  {{ isSearching ? t('library.searching') : t('library.searchBtn') }}
                 </button>
               </div>
 
               <div v-if="searchResults.length > 0" class="search-results">
                 <div class="results-header">
-                  <span>找到 {{ searchResults.length }} 条结果</span>
-                  <span class="search-hint">（实时搜索，输入更多内容可获得更精确的结果）</span>
+                  <span>{{ t('library.searchResultCount', { count: searchResults.length }) }}</span>
+                  <span class="search-hint">{{ t('library.searchHint') }}</span>
                 </div>
                 <div class="results-grid">
                   <div v-for="book in searchResults" :key="book.bib_id" class="result-card">
@@ -434,9 +436,9 @@ onMounted(async () => {
                     </div>
                     <div class="result-card-body">
                       <span class="result-category">{{ book.category }}</span>
-                      <span class="result-count">借阅 {{ book.borrow_count }} 次</span>
+                      <span class="result-count">{{ t('library.borrowCount', { count: book.borrow_count }) }}</span>
                     </div>
-                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="result-borrow-btn">立即借阅</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="result-borrow-btn">{{ t('library.borrowNow') }}</button>
                   </div>
                 </div>
               </div>
@@ -445,8 +447,8 @@ onMounted(async () => {
                 <svg viewBox="0 0 24 24" fill="currentColor" width="64" height="64" class="empty-icon">
                   <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                 </svg>
-                <p>未找到相关图书</p>
-                <p class="empty-hint">请尝试其他关键词</p>
+                <p>{{ t('library.noResults') }}</p>
+                <p class="empty-hint">{{ t('library.noResultsHint') }}</p>
               </div>
             </div>
           </div>
@@ -454,8 +456,8 @@ onMounted(async () => {
           <div v-if="activeTab === 'hot'" class="tab-content">
             <div class="hot-container">
               <div class="hot-header">
-                <h2>热门图书排行</h2>
-                <p>最受欢迎的图书，快来借阅吧</p>
+                <h2>{{ t('library.hotBooksRanking') }}</h2>
+                <p>{{ t('library.hotBooksRankingDesc') }}</p>
               </div>
 
               <div class="hot-books-grid">
@@ -471,14 +473,14 @@ onMounted(async () => {
                     <div class="hot-card-stats">
                       <div class="hot-stat">
                         <span class="hot-stat-value">{{ book.borrow_count }}</span>
-                        <span class="hot-stat-label">借阅次数</span>
+                        <span class="hot-stat-label">{{ t('library.borrowCountShort') }}</span>
                       </div>
                     </div>
                     <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="hot-borrow-btn">
                       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
-                      借阅
+                      {{ t('library.borrow') }}
                     </button>
                   </div>
                 </div>
@@ -489,8 +491,8 @@ onMounted(async () => {
           <div v-if="activeTab === 'mybooks'" class="tab-content">
             <div class="mybooks-container">
               <div class="mybooks-header">
-                <h2>{{ role === 'admin' ? '全部借阅记录' : '我的借阅记录' }}</h2>
-                <p>{{ role === 'admin' ? '查看所有用户的借阅历史' : '查看和管理您的借阅历史' }}</p>
+                <h2>{{ role === 'admin' ? t('library.allBorrowRecords') : t('library.myBorrowRecords') }}</h2>
+                <p>{{ role === 'admin' ? t('library.allBorrowRecordsDesc') : t('library.myBorrowRecordsDesc') }}</p>
               </div>
 
               <div v-if="libraryData.myBorrows && libraryData.myBorrows.length > 0" class="mybooks-list">
@@ -507,7 +509,7 @@ onMounted(async () => {
                     <div class="mybook-title">{{ record.title }}</div>
                     <div class="mybook-meta">
                       <span class="mybook-category">{{ record.category }}</span>
-                      <span class="mybook-action" :class="record.action === 'CKO' ? 'borrow' : 'return'">{{ record.action === 'CKO' ? '借出' : '归还' }}</span>
+                      <span class="mybook-action" :class="record.action === 'CKO' ? 'borrow' : 'return'">{{ record.action === 'CKO' ? t('library.checkout') : t('library.return') }}</span>
                       <span v-if="role === 'admin' && record.borrower" class="mybook-borrower">{{ record.borrower }}</span>
                     </div>
                   </div>
@@ -522,13 +524,13 @@ onMounted(async () => {
                 <svg viewBox="0 0 24 24" fill="currentColor" width="80" height="80" class="empty-icon">
                   <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
                 </svg>
-                <h3>暂无借阅记录</h3>
-                <p>{{ role === 'admin' ? '系统中还没有任何借阅记录' : '快去借阅您感兴趣的图书吧' }}</p>
+                <h3>{{ t('library.noBorrowRecords') }}</h3>
+                <p>{{ role === 'admin' ? t('library.noBorrowRecordsAdmin') : t('library.noBorrowRecordsUser') }}</p>
                 <button @click="activeTab = 'search'" class="go-search-btn">
                   <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                   </svg>
-                  去借书
+                  {{ t('library.goBorrow') }}
                 </button>
               </div>
             </div>

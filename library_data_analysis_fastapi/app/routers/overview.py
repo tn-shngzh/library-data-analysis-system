@@ -9,24 +9,21 @@ async def get_overview_stats():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            try:
-                cur.execute("SELECT * FROM mv_overview_stats")
-                row = cur.fetchone()
-                if row:
-                    return {
-                        "total_readers": row[0],
-                        "total_borrows": row[1],
-                        "active_readers": row[2],
-                        "total_books": row[3],
-                        "cko_count": row[4],
-                        "cki_count": row[5],
-                        "reh_count": row[6],
-                        "rei_count": row[7],
-                        "today_visits": row[8] if row[8] else 0,
-                        "total_categories": row[9]
-                    }
-            except Exception:
-                pass
+            cur.execute("SELECT * FROM mv_overview_stats")
+            row = cur.fetchone()
+            if row:
+                return {
+                    "total_readers": row[0],
+                    "total_borrows": row[1],
+                    "active_readers": row[2],
+                    "total_books": row[3],
+                    "cko_count": row[4],
+                    "cki_count": row[5],
+                    "reh_count": row[6],
+                    "rei_count": row[7],
+                    "today_visits": row[8] if row[8] else 0,
+                    "total_categories": row[9]
+                }
 
             cur.execute("SELECT COUNT(*) FROM borrowers")
             total_readers = cur.fetchone()[0]
@@ -88,10 +85,13 @@ async def get_category_stats():
             """)
             rows = cur.fetchall()
             total = sum(r[1] for r in rows)
-            return [
-                {"name": r[0], "count": r[1], "percent": round(r[1] / total * 100, 1)}
-                for r in rows
-            ]
+            result = []
+            for i, r in enumerate(rows):
+                pct = round(r[1] / total * 100, 1) if total else 0
+                if i == len(rows) - 1:
+                    pct = round(100.0 - sum(round(rr[1] / total * 100, 1) for rr in rows[:-1]), 1)
+                result.append({"name": r[0], "count": r[1], "percent": pct})
+            return result
     finally:
         conn.close()
 

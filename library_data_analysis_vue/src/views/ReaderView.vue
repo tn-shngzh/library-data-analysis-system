@@ -1,10 +1,13 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { readerApi } from '@/api/readers'
 import { formatNumber } from '@/utils/format'
 import { READER_STAT_CARDS } from '@/constants'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -34,7 +37,7 @@ const fetchReaderData = async () => {
     if (data.monthlyTrend) monthlyTrend.value = data.monthlyTrend
     if (data.topReaders) topReaders.value = data.topReaders
   } catch (e) {
-    console.error('获取数据失败', e)
+    console.error('Failed to fetch reader data', e)
   } finally {
     loading.value = false
   }
@@ -61,13 +64,13 @@ const statCards = READER_STAT_CARDS
 
 <template>
   <div class="readers">
-    <PageHeader title="读者管理" description="读者数据统计与分析" :loading="loading" @refresh="fetchReaderData" />
+    <PageHeader :title="t('reader.title')" :description="t('reader.desc')" :loading="loading" @refresh="fetchReaderData" />
 
     <LoadingSpinner :loading="loading">
       <div class="stats-grid">
         <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ formatNumber(readerStats[card.key]) }}</span>
           </div>
           <div class="stat-glow"></div>
@@ -85,27 +88,30 @@ const statCards = READER_STAT_CARDS
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
             </span>
-            读者类型分布
+            {{ t('reader.typeDistribution') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>读者类型</th>
-              <th>人数</th>
-              <th>占比</th>
+              <th>{{ t('reader.type') }}</th>
+              <th>{{ t('borrow.count') }}</th>
+              <th>{{ t('borrow.percent') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(type, index) in readerTypes" :key="type.name" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
               <td><span class="type-tag">{{ type.name }}</span></td>
-              <td class="count-cell">{{ formatNumber(type.count) }} <span class="unit">人</span></td>
+              <td class="count-cell">{{ formatNumber(type.count) }} <span class="unit">{{ t('common.person') }}</span></td>
               <td>
                 <div class="percent-bar">
                   <div class="percent-fill" :style="{ width: type.percent + '%' }"></div>
                   <span class="percent-text">{{ type.percent }}%</span>
                 </div>
               </td>
+            </tr>
+            <tr v-if="readerTypes.length === 0" class="empty-row">
+              <td colspan="3">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -122,20 +128,23 @@ const statCards = READER_STAT_CARDS
                 <path d="M8 17v-3"/>
               </svg>
             </span>
-            月度活跃趋势
+            {{ t('reader.monthlyTrend') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>月份</th>
-              <th>活跃人数</th>
+              <th>{{ t('reader.month') }}</th>
+              <th>{{ t('reader.activeCount') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, index) in monthlyTrend" :key="item.month" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
               <td class="name-cell">{{ item.month }}</td>
-              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">人</span></td>
+              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">{{ t('common.person') }}</span></td>
+            </tr>
+            <tr v-if="monthlyTrend.length === 0" class="empty-row">
+              <td colspan="2">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -150,16 +159,16 @@ const statCards = READER_STAT_CARDS
                 <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
               </svg>
             </span>
-            活跃读者排行 TOP 10
+            {{ t('reader.topReaders') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>排名</th>
-              <th>读者ID</th>
-              <th>类型</th>
-              <th>借阅量</th>
+              <th>{{ t('borrow.rank') }}</th>
+              <th>{{ t('reader.readerId') }}</th>
+              <th>{{ t('reader.type') }}</th>
+              <th>{{ t('reader.borrowCount') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -169,7 +178,10 @@ const statCards = READER_STAT_CARDS
               </td>
               <td class="id-cell">{{ reader.id }}</td>
               <td><span class="type-tag">{{ reader.type }}</span></td>
-              <td class="count-cell">{{ formatNumber(reader.borrowed) }} <span class="unit">本</span></td>
+              <td class="count-cell">{{ formatNumber(reader.borrowed) }} <span class="unit">{{ t('common.book') }}</span></td>
+            </tr>
+            <tr v-if="topReaders.length === 0" class="empty-row">
+              <td colspan="4">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -181,6 +193,13 @@ const statCards = READER_STAT_CARDS
 <style scoped>
 .readers {
   max-width: var(--main-max-width);
+}
+
+.empty-row td {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-neutral-400);
+  font-size: var(--text-sm);
 }
 
 .stats-grid {

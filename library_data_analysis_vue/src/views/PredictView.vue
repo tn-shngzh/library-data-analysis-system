@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -26,10 +29,10 @@ const statCards = computed(() => {
   const total = data.reduce((s, d) => s + (d.count || 0), 0)
   const avg = data.length ? Math.round(total / data.length) : 0
   return [
-    { label: '历史数据量', value: data.length + ' 个月', icon: 'database', color: '#6366f1' },
-    { label: '月均值', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
-    { label: '预测模型', value: activeModel.value === 'moving_avg' ? '移动平均' : '线性回归', icon: 'model', color: '#10b981' },
-    { label: '预测周期', value: predictionMonths.value + ' 个月', icon: 'calendar', color: '#f59e0b' }
+    { i18nKey: 'predict.historicalData', value: data.length + ' ' + t('predict.months'), icon: 'database', color: '#6366f1' },
+    { i18nKey: 'predict.monthlyAvg', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
+    { i18nKey: 'predict.predictionModel', value: activeModel.value === 'moving_avg' ? t('predict.movingAvg') : t('predict.linearRegression'), icon: 'model', color: '#10b981' },
+    { i18nKey: 'predict.predictionPeriod', value: predictionMonths.value + ' ' + t('predict.months'), icon: 'calendar', color: '#f59e0b' }
   ]
 })
 
@@ -53,7 +56,7 @@ const generatePrediction = () => {
       const predicted = Math.max(0, Math.round(avg + trend * i * 0.3))
       const confidence = Math.max(60, 95 - i * 10)
       predictions.push({
-        month: `${12 + i}月`,
+        month: `${12 + i}${t('predict.month')}`,
         predicted,
         lower: Math.max(0, Math.round(predicted * (1 - (100 - confidence) / 100))),
         upper: Math.round(predicted * (1 + (100 - confidence) / 100)),
@@ -77,7 +80,7 @@ const generatePrediction = () => {
       const predicted = Math.max(0, Math.round(slope * x + intercept))
       const confidence = Math.max(55, 92 - i * 12)
       predictions.push({
-        month: `${12 + i}月`,
+        month: `${12 + i}${t('predict.month')}`,
         predicted,
         lower: Math.max(0, Math.round(predicted * (1 - (100 - confidence) / 100))),
         upper: Math.round(predicted * (1 + (100 - confidence) / 100)),
@@ -157,19 +160,19 @@ onMounted(() => {
   <div class="predict-view">
     <div class="page-header">
       <div class="header-info">
-        <h1>预测中心</h1>
-        <p>基于历史数据的借阅趋势预测分析</p>
+        <h1>{{ t('predict.title') }}</h1>
+        <p>{{ t('predict.desc') }}</p>
       </div>
     </div>
 
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <span>正在加载数据...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <template v-else>
       <div class="stats-grid">
-        <div v-for="card in statCards" :key="card.label" class="stat-card" :style="{ '--accent': card.color }">
+        <div v-for="card in statCards" :key="card.i18nKey" class="stat-card" :style="{ '--accent': card.color }">
           <div class="stat-icon">
             <svg v-if="card.icon === 'database'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <ellipse cx="12" cy="5" rx="9" ry="3"/>
@@ -194,7 +197,7 @@ onMounted(() => {
             </svg>
           </div>
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ card.value }}</span>
           </div>
         </div>
@@ -202,11 +205,11 @@ onMounted(() => {
 
       <div class="config-card">
         <div class="card-header">
-          <h3>预测配置</h3>
+          <h3>{{ t('predict.config') }}</h3>
         </div>
         <div class="config-form">
           <div class="form-group">
-            <label>预测模型</label>
+            <label>{{ t('predict.predictionModel') }}</label>
             <div class="model-options">
               <button
                 class="model-btn"
@@ -216,8 +219,8 @@ onMounted(() => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                 </svg>
-                <span>移动平均</span>
-                <small>基于近期数据均值</small>
+                <span>{{ t('predict.movingAvg') }}</span>
+                <small>{{ t('predict.movingAvgDesc') }}</small>
               </button>
               <button
                 class="model-btn"
@@ -227,13 +230,13 @@ onMounted(() => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="5" y1="19" x2="19" y2="5"/>
                 </svg>
-                <span>线性回归</span>
-                <small>基于线性趋势拟合</small>
+                <span>{{ t('predict.linearRegression') }}</span>
+                <small>{{ t('predict.linearRegressionDesc') }}</small>
               </button>
             </div>
           </div>
           <div class="form-group">
-            <label>预测周期</label>
+            <label>{{ t('predict.predictionPeriod') }}</label>
             <div class="month-selector">
               <button
                 v-for="m in [1, 2, 3, 6]"
@@ -241,7 +244,7 @@ onMounted(() => {
                 class="month-btn"
                 :class="{ active: predictionMonths === m }"
                 @click="predictionMonths = m"
-              >{{ m }}个月</button>
+              >{{ m }}{{ t('predict.monthsShort') }}</button>
             </div>
           </div>
           <button class="predict-btn" @click="generatePrediction" :disabled="monthlyTrend.length < 3">
@@ -249,7 +252,7 @@ onMounted(() => {
               <path d="M22 2L11 13"/>
               <path d="M22 2l-7 20-4-9-9-4 20-7z"/>
             </svg>
-            <span>开始预测</span>
+            <span>{{ t('predict.startPrediction') }}</span>
           </button>
         </div>
       </div>
@@ -262,16 +265,16 @@ onMounted(() => {
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
           <div>
-            <h4>数据不足</h4>
-            <p>预测功能需要至少3个月的历史数据，当前数据量不足</p>
+            <h4>{{ t('predict.insufficientData') }}</h4>
+            <p>{{ t('predict.insufficientDataDesc') }}</p>
           </div>
         </div>
       </div>
 
       <div v-if="showPrediction && predictionResult" class="card">
         <div class="card-header">
-          <h3>预测结果</h3>
-          <span class="card-subtitle">{{ activeModel === 'moving_avg' ? '移动平均模型' : '线性回归模型' }}</span>
+          <h3>{{ t('predict.result') }}</h3>
+          <span class="card-subtitle">{{ activeModel === 'moving_avg' ? t('predict.movingAvgModel') : t('predict.linearRegressionModel') }}</span>
         </div>
         <div class="chart-container">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="predict-chart">
@@ -308,31 +311,31 @@ onMounted(() => {
         <div class="legend-bar">
           <div class="legend-item">
             <span class="legend-dot actual"></span>
-            <span>实际数据</span>
+            <span>{{ t('predict.actualData') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-dot predicted"></span>
-            <span>预测数据</span>
+            <span>{{ t('predict.predictedData') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-line confidence"></span>
-            <span>置信区间</span>
+            <span>{{ t('predict.confidenceInterval') }}</span>
           </div>
         </div>
       </div>
 
       <div v-if="showPrediction && predictionResult" class="card">
         <div class="card-header">
-          <h3>预测明细</h3>
+          <h3>{{ t('predict.predictionDetail') }}</h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>月份</th>
-              <th>预测值</th>
-              <th>下限</th>
-              <th>上限</th>
-              <th>置信度</th>
+              <th>{{ t('predict.month') }}</th>
+              <th>{{ t('predict.predictedValue') }}</th>
+              <th>{{ t('predict.lowerBound') }}</th>
+              <th>{{ t('predict.upperBound') }}</th>
+              <th>{{ t('predict.confidence') }}</th>
             </tr>
           </thead>
           <tbody>

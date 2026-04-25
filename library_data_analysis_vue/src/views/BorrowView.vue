@@ -1,10 +1,13 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { borrowApi } from '@/api/borrows'
 import { formatNumber } from '@/utils/format'
 import { BORROW_STAT_CARDS, ACTION_MAP, DEGREE_MAP } from '@/constants'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
+
+const { t } = useI18n()
 
 const props = defineProps({
   allData: {
@@ -44,7 +47,7 @@ const fetchBorrowData = async () => {
     if (data.topBooks) topBooks.value = data.topBooks
     if (data.recentBorrows) recentBorrows.value = data.recentBorrows
   } catch (e) {
-    console.error('获取数据失败', e)
+    console.error('Failed to fetch borrow data', e)
   } finally {
     loading.value = false
   }
@@ -71,13 +74,13 @@ onMounted(() => {
 
 <template>
   <div class="borrows">
-    <PageHeader title="借阅管理" description="借阅数据统计与分析" :loading="loading" @refresh="fetchBorrowData" />
+    <PageHeader :title="t('borrow.title')" :description="t('borrow.desc')" :loading="loading" @refresh="fetchBorrowData" />
 
     <LoadingSpinner :loading="loading">
       <div class="stats-grid">
         <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
           <div class="stat-info">
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ t(card.i18nKey) }}</span>
             <span class="stat-value">{{ formatNumber(borrowStats[card.key]) }}</span>
           </div>
           <div class="stat-glow"></div>
@@ -93,27 +96,30 @@ onMounted(() => {
                 <polyline points="14 2 14 8 20 8"/>
               </svg>
             </span>
-            操作类型统计
+            {{ t('borrow.actionStats') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>操作类型</th>
-              <th>数量</th>
-              <th>占比</th>
+              <th>{{ t('borrow.action') }}</th>
+              <th>{{ t('borrow.count') }}</th>
+              <th>{{ t('borrow.percent') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, index) in actionStats" :key="item.action" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
               <td><span class="type-tag">{{ item.name }}</span></td>
-              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">次</span></td>
+              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">{{ t('common.times') }}</span></td>
               <td>
                 <div class="percent-bar">
                   <div class="percent-fill" :style="{ width: item.percent + '%' }"></div>
                   <span class="percent-text">{{ item.percent }}%</span>
                 </div>
               </td>
+            </tr>
+            <tr v-if="actionStats.length === 0" class="empty-row">
+              <td colspan="3">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -130,27 +136,30 @@ onMounted(() => {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
             </span>
-            读者类型借阅统计
+            {{ t('borrow.degreeStats') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>读者类型</th>
-              <th>借阅量</th>
-              <th>占比</th>
+              <th>{{ t('borrow.degree') }}</th>
+              <th>{{ t('borrow.count') }}</th>
+              <th>{{ t('borrow.percent') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, index) in degreeStats" :key="item.code" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
               <td><span class="type-tag">{{ item.name }}</span></td>
-              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">次</span></td>
+              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">{{ t('common.times') }}</span></td>
               <td>
                 <div class="percent-bar">
                   <div class="percent-fill" :style="{ width: item.percent + '%' }"></div>
                   <span class="percent-text">{{ item.percent }}%</span>
                 </div>
               </td>
+            </tr>
+            <tr v-if="degreeStats.length === 0" class="empty-row">
+              <td colspan="3">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -165,16 +174,16 @@ onMounted(() => {
                 <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
               </svg>
             </span>
-            借阅排行 TOP 15 读者
+            {{ t('borrow.topBorrowers') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>排名</th>
-              <th>读者ID</th>
-              <th>类型</th>
-              <th>借阅量</th>
+              <th>{{ t('borrow.rank') }}</th>
+              <th>{{ t('borrow.readerId') }}</th>
+              <th>{{ t('borrow.type') }}</th>
+              <th>{{ t('borrow.count') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -184,7 +193,10 @@ onMounted(() => {
               </td>
               <td class="id-cell">{{ item.borrower_id }}</td>
               <td><span class="type-tag">{{ item.degree }}</span></td>
-              <td class="count-cell">{{ formatNumber(item.borrow_count) }} <span class="unit">次</span></td>
+              <td class="count-cell">{{ formatNumber(item.borrow_count) }} <span class="unit">{{ t('common.times') }}</span></td>
+            </tr>
+            <tr v-if="topBorrowers.length === 0" class="empty-row">
+              <td colspan="4">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -198,16 +210,16 @@ onMounted(() => {
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
             </span>
-            借阅排行 TOP 15 图书
+            {{ t('borrow.topBooks') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>排名</th>
-              <th>图书ID</th>
-              <th>分类</th>
-              <th>借阅量</th>
+              <th>{{ t('borrow.rank') }}</th>
+              <th>{{ t('borrow.bookId') }}</th>
+              <th>{{ t('borrow.category') }}</th>
+              <th>{{ t('borrow.count') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -217,7 +229,10 @@ onMounted(() => {
               </td>
               <td class="id-cell">{{ item.bib_id }}</td>
               <td><span class="category-tag">{{ item.category }}</span></td>
-              <td class="count-cell">{{ formatNumber(item.borrow_count) }} <span class="unit">次</span></td>
+              <td class="count-cell">{{ formatNumber(item.borrow_count) }} <span class="unit">{{ t('common.times') }}</span></td>
+            </tr>
+            <tr v-if="topBooks.length === 0" class="empty-row">
+              <td colspan="4">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -232,18 +247,18 @@ onMounted(() => {
                 <polyline points="12 6 12 12 16 14"/>
               </svg>
             </span>
-            最近借阅记录
+            {{ t('borrow.recentBorrows') }}
           </h3>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>日期</th>
-              <th>时间</th>
-              <th>读者ID</th>
-              <th>图书ID</th>
-              <th>读者类型</th>
-              <th>分类</th>
+              <th>{{ t('borrow.date') }}</th>
+              <th>{{ t('borrow.time') }}</th>
+              <th>{{ t('borrow.readerId') }}</th>
+              <th>{{ t('borrow.bookId') }}</th>
+              <th>{{ t('borrow.type') }}</th>
+              <th>{{ t('borrow.category') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -254,6 +269,9 @@ onMounted(() => {
               <td class="id-cell">{{ item.bib_id }}</td>
               <td><span class="type-tag">{{ item.degree }}</span></td>
               <td><span class="category-tag">{{ item.category }}</span></td>
+            </tr>
+            <tr v-if="recentBorrows.length === 0" class="empty-row">
+              <td colspan="6">{{ t('common.noData') }}</td>
             </tr>
           </tbody>
         </table>
@@ -562,5 +580,12 @@ onMounted(() => {
   .percent-fill {
     max-width: 100%;
   }
+}
+
+.empty-row td {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-neutral-400);
+  font-size: var(--text-sm);
 }
 </style>
