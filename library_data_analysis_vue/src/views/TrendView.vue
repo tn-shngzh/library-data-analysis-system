@@ -62,7 +62,7 @@ onMounted(async () => {
 
 const maxMonthly = computed(() => {
   if (!monthlyTrend.value.length) return 1
-  return Math.max(...monthlyTrend.value.map(m => m.count || 0))
+  return Math.max(...monthlyTrend.value.map(m => m.activeCount || m.count || 0))
 })
 
 const maxDaily = computed(() => {
@@ -85,9 +85,9 @@ const monthlyChartPaths = computed(() => {
 
   const points = data.map((d, i) => ({
     x: padding + (i / (data.length - 1 || 1)) * chartW,
-    y: padding + chartH - ((d.count || 0) / range) * chartH,
+    y: padding + chartH - ((d.activeCount || d.count || 0) / range) * chartH,
     label: d.month,
-    value: d.count || 0
+    value: d.activeCount || d.count || 0
   }))
 
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
@@ -126,10 +126,10 @@ const hoveredPoint = ref(null)
 
 const statCards = computed(() => {
   const data = monthlyTrend.value
-  const total = data.reduce((s, d) => s + (d.count || 0), 0)
+  const total = data.reduce((s, d) => s + (d.activeCount || d.count || 0), 0)
   const avg = data.length ? Math.round(total / data.length) : 0
-  const max = data.length ? Math.max(...data.map(d => d.count || 0)) : 0
-  const maxMonth = data.find(d => d.count === max)?.month || '-'
+  const max = data.length ? Math.max(...data.map(d => d.activeCount || d.count || 0)) : 0
+  const maxMonth = data.find(d => (d.activeCount || d.count) === max)?.month || '-'
   return [
     { i18nKey: 'trend.yearlyTotal', value: formatNumber(total), icon: 'total', color: '#6366f1' },
     { i18nKey: 'trend.monthlyAvg', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
@@ -313,18 +313,18 @@ const statCards = computed(() => {
           <tbody>
             <tr v-for="(item, idx) in monthlyTrend" :key="item.month">
               <td class="name-cell">{{ item.month }}</td>
-              <td class="count-cell">{{ formatNumber(item.count) }}</td>
+              <td class="count-cell">{{ formatNumber(item.activeCount || item.count) }}</td>
               <td>
-                <span v-if="idx > 0" class="change-tag" :class="item.count >= monthlyTrend[idx-1].count ? 'up' : 'down'">
-                  {{ item.count >= (monthlyTrend[idx-1]?.count || 0) ? '↑' : '↓' }}
-                  {{ idx > 0 ? Math.abs(((item.count || 0) - (monthlyTrend[idx-1]?.count || 0)) / (monthlyTrend[idx-1]?.count || 1) * 100).toFixed(1) : 0 }}%
+                <span v-if="idx > 0" class="change-tag" :class="(item.activeCount || item.count) >= (monthlyTrend[idx-1].activeCount || monthlyTrend[idx-1].count || 0) ? 'up' : 'down'">
+                  {{ (item.activeCount || item.count) >= (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 0) ? '↑' : '↓' }}
+                  {{ idx > 0 ? Math.abs((((item.activeCount || item.count || 0) - (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 0)) / (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 1) * 100)).toFixed(1) : 0 }}%
                 </span>
                 <span v-else class="change-tag neutral">-</span>
               </td>
               <td>
                 <div class="percent-bar">
-                  <div class="percent-fill" :style="{ width: ((item.count || 0) / maxMonthly * 100) + '%' }"></div>
-                  <span class="percent-text">{{ ((item.count || 0) / (monthlyTrend.reduce((s, d) => s + (d.count || 0), 0) || 1) * 100).toFixed(1) }}%</span>
+                  <div class="percent-fill" :style="{ width: ((item.activeCount || item.count || 0) / maxMonthly * 100) + '%' }"></div>
+                  <span class="percent-text">{{ ((item.activeCount || item.count || 0) / (monthlyTrend.reduce((s, d) => s + (d.activeCount || d.count || 0), 0) || 1) * 100).toFixed(1) }}%</span>
                 </div>
               </td>
             </tr>

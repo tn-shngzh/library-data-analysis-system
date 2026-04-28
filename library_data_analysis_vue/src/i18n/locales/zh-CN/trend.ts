@@ -1,0 +1,20 @@
+export default {
+  title: '趋势分析',
+  desc: '借阅与读者活跃度趋势变化分析',
+  yearlyTotal: '年度总量',
+  monthlyAvg: '月均值',
+  peakMonth: '峰值月份',
+  peakValue: '峰值人数',
+  monthlyTab: '月度趋势',
+  dailyTab: '每日趋势',
+  monthlyActiveTrend: '月度活跃读者趋势',
+  monthlyActiveSubtitle: '展示每月活跃读者数量变化',
+  dailyBorrowTrend: '每日借阅趋势',
+  dailyBorrowSubtitle: '展示每日借阅数量变化',
+  loadingDaily: '每日趋势数据加载中...',
+  monthlyDetail: '月度活跃数据明细',
+  month: '月份',
+  activeCount: '活跃人数',
+  change: '环比变化',
+  percent: '占比'
+}

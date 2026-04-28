@@ -1,0 +1,20 @@
+export default {
+  title: 'Trend Analysis',
+  desc: 'Borrowing and reader activity trend analysis',
+  yearlyTotal: 'Yearly Total',
+  monthlyAvg: 'Monthly Avg',
+  peakMonth: 'Peak Month',
+  peakValue: 'Peak Value',
+  monthlyTab: 'Monthly',
+  dailyTab: 'Daily',
+  monthlyActiveTrend: 'Monthly Active Reader Trend',
+  monthlyActiveSubtitle: 'Monthly active reader count changes',
+  dailyBorrowTrend: 'Daily Borrowing Trend',
+  dailyBorrowSubtitle: 'Daily borrowing count changes',
+  loadingDaily: 'Loading daily trend data...',
+  monthlyDetail: 'Monthly Active Data Details',
+  month: 'Month',
+  activeCount: 'Active Count',
+  change: 'MoM Change',
+  percent: 'Percentage'
+}

@@ -160,8 +160,8 @@ const handleChangePassword = () => {
 
 const languageChangedMsg = ref(false)
 
-const handleSelectLocale = (code) => {
-  setLocale(code)
+const handleSelectLocale = async (code) => {
+  await setLocale(code)
   languageChangedMsg.value = true
   setTimeout(() => {
     languageChangedMsg.value = false

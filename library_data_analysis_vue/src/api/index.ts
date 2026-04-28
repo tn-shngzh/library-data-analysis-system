@@ -1,6 +1,8 @@
 const BASE_URL = ''
+const TIMEOUT = 15000
+const MAX_RETRIES = 2
 
-const request = async (url, options = {}) => {
+const request = async (url, options = {}, retries = 0) => {
   const token = localStorage.getItem('token')
   const headers = { ...options.headers }
 
@@ -12,8 +14,15 @@ const request = async (url, options = {}) => {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json'
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT)
+
   try {
-    const response = await fetch(`${BASE_URL}${url}`, { ...options, headers })
+    const response = await fetch(`${BASE_URL}${url}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    })
 
     if (response.status === 401) {
       localStorage.removeItem('token')
@@ -26,8 +35,13 @@ const request = async (url, options = {}) => {
     return response
   } catch (error) {
     if (error.message === '认证已过期，请重新登录') throw error
+    if (error.name === 'AbortError' && retries < MAX_RETRIES) {
+      return request(url, options, retries + 1)
+    }
     console.error(`请求失败: ${url}`, error)
     throw error
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

@@ -3,6 +3,7 @@ import uuid
 import random
 import base64
 import io
+import logging
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
@@ -11,7 +12,11 @@ from fastapi import HTTPException, Request
 
 from app.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_DAYS
 
+logger = logging.getLogger(__name__)
+
 captcha_store = {}
+
+token_blacklist = set()
 
 
 def hash_password(password: str) -> str:
@@ -42,10 +47,14 @@ def validate_username(username: str) -> tuple:
 def validate_password(password: str) -> tuple:
     if not password or len(password.strip()) == 0:
         return False, "密码不能为空"
-    if len(password) < 6:
-        return False, "密码长度不能少于6个字符"
+    if len(password) < 8:
+        return False, "密码长度不能少于8个字符"
     if len(password) > 50:
         return False, "密码长度不能超过50个字符"
+    if not re.search(r'[A-Za-z]', password):
+        return False, "密码必须包含字母"
+    if not re.search(r'[0-9]', password):
+        return False, "密码必须包含数字"
     return True, ""
 
 
@@ -56,12 +65,23 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def revoke_token(token: str):
+    token_blacklist.add(token)
+    logger.info(f"Token revoked")
+
+
+def is_token_revoked(token: str) -> bool:
+    return token in token_blacklist
+
+
 def get_current_user(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="未提供认证信息")
     token = auth_header.split(" ")[1]
     try:
+        if is_token_revoked(token):
+            raise HTTPException(status_code=401, detail="Token 已注销")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         if not username:

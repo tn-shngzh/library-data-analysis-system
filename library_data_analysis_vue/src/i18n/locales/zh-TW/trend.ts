@@ -1,0 +1,20 @@
+export default {
+  title: '趨勢分析',
+  desc: '借閱與讀者活躍度趨勢變化分析',
+  yearlyTotal: '年度總量',
+  monthlyAvg: '月均值',
+  peakMonth: '峰值月份',
+  peakValue: '峰值人數',
+  monthlyTab: '月度趨勢',
+  dailyTab: '每日趨勢',
+  monthlyActiveTrend: '月度活躍讀者趨勢',
+  monthlyActiveSubtitle: '展示每月活躍讀者數量變化',
+  dailyBorrowTrend: '每日借閱趨勢',
+  dailyBorrowSubtitle: '展示每日借閱數量變化',
+  loadingDaily: '每日趨勢數據載入中...',
+  monthlyDetail: '月度活躍數據明細',
+  month: '月份',
+  activeCount: '活躍人數',
+  change: '環比變化',
+  percent: '佔比'
+}

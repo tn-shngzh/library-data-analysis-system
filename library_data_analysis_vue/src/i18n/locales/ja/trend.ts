@@ -1,0 +1,20 @@
+export default {
+  title: 'トレンド分析',
+  desc: '貸出と利用者アクティブ度のトレンド変化分析',
+  yearlyTotal: '年間総数',
+  monthlyAvg: '月平均',
+  peakMonth: 'ピーク月',
+  peakValue: 'ピーク値',
+  monthlyTab: '月次',
+  dailyTab: '日次',
+  monthlyActiveTrend: '月間アクティブ利用者トレンド',
+  monthlyActiveSubtitle: '月間アクティブ利用者数の変化',
+  dailyBorrowTrend: '日次貸出トレンド',
+  dailyBorrowSubtitle: '日次貸出数の変化',
+  loadingDaily: '日次トレンドデータを読み込み中...',
+  monthlyDetail: '月間アクティブデータ明細',
+  month: '月',
+  activeCount: 'アクティブ数',
+  change: '前月比',
+  percent: '割合'
+}

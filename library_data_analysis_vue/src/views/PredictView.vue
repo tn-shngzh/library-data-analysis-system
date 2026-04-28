@@ -13,6 +13,7 @@ const props = defineProps({
 
 const loading = ref(false)
 const activeModel = ref('moving_avg')
+const predictionDimension = ref('active')
 const predictionMonths = ref(3)
 const showPrediction = ref(false)
 const predictionResult = ref(null)
@@ -24,72 +25,124 @@ const formatNumber = (num) => {
 
 const monthlyTrend = computed(() => props.allData?.readers?.monthlyTrend || [])
 
+const activeReaderTrend = computed(() => {
+  return monthlyTrend.value.map(d => ({ month: d.month, count: d.activeCount || 0 }))
+})
+
+const borrowTrend = computed(() => {
+  return monthlyTrend.value.map(d => ({ month: d.month, count: d.borrowCount || 0 }))
+})
+
 const statCards = computed(() => {
-  const data = monthlyTrend.value
-  const total = data.reduce((s, d) => s + (d.count || 0), 0)
-  const avg = data.length ? Math.round(total / data.length) : 0
+  const activeData = activeReaderTrend.value
+  const borrowData = borrowTrend.value
+  const activeTotal = activeData.reduce((s, d) => s + (d.count || 0), 0)
+  const activeAvg = activeData.length ? Math.round(activeTotal / activeData.length) : 0
+  const borrowTotal = borrowData.reduce((s, d) => s + (d.count || 0), 0)
+  const borrowAvg = borrowData.length ? Math.round(borrowTotal / borrowData.length) : 0
   return [
-    { i18nKey: 'predict.historicalData', value: data.length + ' ' + t('predict.months'), icon: 'database', color: '#6366f1' },
-    { i18nKey: 'predict.monthlyAvg', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
-    { i18nKey: 'predict.predictionModel', value: activeModel.value === 'moving_avg' ? t('predict.movingAvg') : t('predict.linearRegression'), icon: 'model', color: '#10b981' },
+    { i18nKey: 'predict.historicalData', value: activeData.length + ' ' + t('predict.months'), icon: 'database', color: '#6366f1' },
+    { i18nKey: 'predict.activeReaderAvg', value: formatNumber(activeAvg), icon: 'avg', color: '#3b82f6' },
+    { i18nKey: 'predict.borrowAvg', value: formatNumber(borrowAvg), icon: 'avg', color: '#10b981' },
     { i18nKey: 'predict.predictionPeriod', value: predictionMonths.value + ' ' + t('predict.months'), icon: 'calendar', color: '#f59e0b' }
   ]
 })
 
 const generatePrediction = () => {
-  const data = monthlyTrend.value
-  if (data.length < 3) return
+  const activeData = activeReaderTrend.value
+  const borrowData = borrowTrend.value
+  if (activeData.length < 3 || borrowData.length < 3) return
 
   showPrediction.value = true
-  const counts = data.map(d => d.count || 0)
+  const activeCounts = activeData.map(d => d.count || 0)
+  const borrowCounts = borrowData.map(d => d.count || 0)
 
-  let predictions = []
+  let activePredictions = []
+  let borrowPredictions = []
+  
   if (activeModel.value === 'moving_avg') {
     const windowSize = 3
-    const lastValues = counts.slice(-windowSize)
-    const avg = lastValues.reduce((s, v) => s + v, 0) / windowSize
-    const trend = counts.length >= 6
-      ? (counts.slice(-3).reduce((s, v) => s + v, 0) - counts.slice(-6, -3).reduce((s, v) => s + v, 0)) / 3
+    const lastActiveValues = activeCounts.slice(-windowSize)
+    const activeAvg = lastActiveValues.reduce((s, v) => s + v, 0) / windowSize
+    const activeTrend = activeCounts.length >= 6
+      ? (activeCounts.slice(-3).reduce((s, v) => s + v, 0) - activeCounts.slice(-6, -3).reduce((s, v) => s + v, 0)) / 3
+      : 0
+
+    const lastBorrowValues = borrowCounts.slice(-windowSize)
+    const borrowAvg = lastBorrowValues.reduce((s, v) => s + v, 0) / windowSize
+    const borrowTrend = borrowCounts.length >= 6
+      ? (borrowCounts.slice(-3).reduce((s, v) => s + v, 0) - borrowCounts.slice(-6, -3).reduce((s, v) => s + v, 0)) / 3
       : 0
 
     for (let i = 1; i <= predictionMonths.value; i++) {
-      const predicted = Math.max(0, Math.round(avg + trend * i * 0.3))
+      const activePredicted = Math.max(0, Math.round(activeAvg + activeTrend * i * 0.3))
+      const borrowPredicted = Math.max(0, Math.round(borrowAvg + borrowTrend * i * 0.3))
       const confidence = Math.max(60, 95 - i * 10)
-      predictions.push({
+      
+      activePredictions.push({
         month: `${12 + i}${t('predict.month')}`,
-        predicted,
-        lower: Math.max(0, Math.round(predicted * (1 - (100 - confidence) / 100))),
-        upper: Math.round(predicted * (1 + (100 - confidence) / 100)),
+        predicted: activePredicted,
+        lower: Math.max(0, Math.round(activePredicted * (1 - (100 - confidence) / 100))),
+        upper: Math.round(activePredicted * (1 + (100 - confidence) / 100)),
+        confidence
+      })
+      
+      borrowPredictions.push({
+        month: `${12 + i}${t('predict.month')}`,
+        predicted: borrowPredicted,
+        lower: Math.max(0, Math.round(borrowPredicted * (1 - (100 - confidence) / 100))),
+        upper: Math.round(borrowPredicted * (1 + (100 - confidence) / 100)),
         confidence
       })
     }
   } else {
-    const n = counts.length
+    const n = activeCounts.length
     const xMean = (n + 1) / 2
-    const yMean = counts.reduce((s, v) => s + v, 0) / n
-    let num = 0, den = 0
+    const activeYMean = activeCounts.reduce((s, v) => s + v, 0) / n
+    const borrowYMean = borrowCounts.reduce((s, v) => s + v, 0) / n
+    
+    let activeNum = 0, activeDen = 0
+    let borrowNum = 0, borrowDen = 0
     for (let i = 0; i < n; i++) {
-      num += (i + 1 - xMean) * (counts[i] - yMean)
-      den += (i + 1 - xMean) ** 2
+      activeNum += (i + 1 - xMean) * (activeCounts[i] - activeYMean)
+      activeDen += (i + 1 - xMean) ** 2
+      borrowNum += (i + 1 - xMean) * (borrowCounts[i] - borrowYMean)
+      borrowDen += (i + 1 - xMean) ** 2
     }
-    const slope = den !== 0 ? num / den : 0
-    const intercept = yMean - slope * xMean
+    
+    const activeSlope = activeDen !== 0 ? activeNum / activeDen : 0
+    const activeIntercept = activeYMean - activeSlope * xMean
+    const borrowSlope = borrowDen !== 0 ? borrowNum / borrowDen : 0
+    const borrowIntercept = borrowYMean - borrowSlope * xMean
 
     for (let i = 1; i <= predictionMonths.value; i++) {
       const x = n + i
-      const predicted = Math.max(0, Math.round(slope * x + intercept))
+      const activePredicted = Math.max(0, Math.round(activeSlope * x + activeIntercept))
+      const borrowPredicted = Math.max(0, Math.round(borrowSlope * x + borrowIntercept))
       const confidence = Math.max(55, 92 - i * 12)
-      predictions.push({
+      
+      activePredictions.push({
         month: `${12 + i}${t('predict.month')}`,
-        predicted,
-        lower: Math.max(0, Math.round(predicted * (1 - (100 - confidence) / 100))),
-        upper: Math.round(predicted * (1 + (100 - confidence) / 100)),
+        predicted: activePredicted,
+        lower: Math.max(0, Math.round(activePredicted * (1 - (100 - confidence) / 100))),
+        upper: Math.round(activePredicted * (1 + (100 - confidence) / 100)),
+        confidence
+      })
+      
+      borrowPredictions.push({
+        month: `${12 + i}${t('predict.month')}`,
+        predicted: borrowPredicted,
+        lower: Math.max(0, Math.round(borrowPredicted * (1 - (100 - confidence) / 100))),
+        upper: Math.round(borrowPredicted * (1 + (100 - confidence) / 100)),
         confidence
       })
     }
   }
 
-  predictionResult.value = predictions
+  predictionResult.value = {
+    active: activePredictions,
+    borrow: borrowPredictions
+  }
 }
 
 const chartWidth = 800
@@ -97,20 +150,25 @@ const chartHeight = 300
 const padding = 50
 
 const combinedChartPaths = computed(() => {
-  const data = monthlyTrend.value
-  const pred = predictionResult.value || []
-  if (!data.length) return { linePath: '', areaPath: '', predPath: '', points: [], predPoints: [] }
+  const activeData = activeReaderTrend.value
+  const borrowData = borrowTrend.value
+  const pred = predictionResult.value
+  if (!activeData.length && !borrowData.length) return { activeLinePath: '', activeAreaPath: '', borrowLinePath: '', borrowAreaPath: '', activePredPath: '', borrowPredPath: '', activePoints: [], borrowPoints: [], activePredPoints: [], borrowPredPoints: [] }
 
+  const activeValues = activeData.map(d => d.count || 0)
+  const borrowValues = borrowData.map(d => d.count || 0)
   const allValues = [
-    ...data.map(d => d.count || 0),
-    ...pred.map(p => p.upper || 0)
+    ...activeValues,
+    ...borrowValues,
+    ...(pred?.active?.map(p => p.upper || 0) || []),
+    ...(pred?.borrow?.map(p => p.upper || 0) || [])
   ]
   const maxVal = Math.max(...allValues) || 1
-  const totalPoints = data.length + pred.length
+  const totalPoints = activeData.length + (pred?.active?.length || 0)
   const chartW = chartWidth - padding * 2
   const chartH = chartHeight - padding * 2
 
-  const points = data.map((d, i) => ({
+  const activePoints = activeData.map((d, i) => ({
     x: padding + (i / (totalPoints - 1 || 1)) * chartW,
     y: padding + chartH - ((d.count || 0) / maxVal) * chartH,
     label: d.month,
@@ -118,9 +176,19 @@ const combinedChartPaths = computed(() => {
     type: 'actual'
   }))
 
-  const lastActual = points[points.length - 1]
-  const predPoints = pred.map((p, i) => ({
-    x: padding + ((data.length + i) / (totalPoints - 1 || 1)) * chartW,
+  const borrowPoints = borrowData.map((d, i) => ({
+    x: padding + (i / (totalPoints - 1 || 1)) * chartW,
+    y: padding + chartH - ((d.count || 0) / maxVal) * chartH,
+    label: d.month,
+    value: d.count || 0,
+    type: 'actual'
+  }))
+
+  const lastActive = activePoints[activePoints.length - 1]
+  const lastBorrow = borrowPoints[borrowPoints.length - 1]
+  
+  const activePredPoints = (pred?.active || []).map((p, i) => ({
+    x: padding + ((activeData.length + i) / (totalPoints - 1 || 1)) * chartW,
     y: padding + chartH - (p.predicted / maxVal) * chartH,
     label: p.month,
     value: p.predicted,
@@ -129,18 +197,51 @@ const combinedChartPaths = computed(() => {
     type: 'predicted'
   }))
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const areaPath = linePath +
-    ` L ${points[points.length - 1].x} ${padding + chartH}` +
-    ` L ${points[0].x} ${padding + chartH} Z`
+  const borrowPredPoints = (pred?.borrow || []).map((p, i) => ({
+    x: padding + ((borrowData.length + i) / (totalPoints - 1 || 1)) * chartW,
+    y: padding + chartH - (p.predicted / maxVal) * chartH,
+    label: p.month,
+    value: p.predicted,
+    upper: padding + chartH - (p.upper / maxVal) * chartH,
+    lower: padding + chartH - (p.lower / maxVal) * chartH,
+    type: 'predicted'
+  }))
 
-  let predPath = ''
-  if (predPoints.length && lastActual) {
-    predPath = `M ${lastActual.x} ${lastActual.y} ` +
-      predPoints.map(p => `L ${p.x} ${p.y}`).join(' ')
+  const activeLinePath = activePoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const activeAreaPath = activeLinePath +
+    ` L ${activePoints[activePoints.length - 1]?.x || padding} ${padding + chartH}` +
+    ` L ${activePoints[0].x} ${padding + chartH} Z`
+
+  const borrowLinePath = borrowPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const borrowAreaPath = borrowLinePath +
+    ` L ${borrowPoints[borrowPoints.length - 1]?.x || padding} ${padding + chartH}` +
+    ` L ${borrowPoints[0].x} ${padding + chartH} Z`
+
+  let activePredPath = ''
+  if (activePredPoints.length && lastActive) {
+    activePredPath = `M ${lastActive.x} ${lastActive.y} ` +
+      activePredPoints.map(p => `L ${p.x} ${p.y}`).join(' ')
   }
 
-  return { linePath, areaPath, predPath, points, predPoints, maxVal }
+  let borrowPredPath = ''
+  if (borrowPredPoints.length && lastBorrow) {
+    borrowPredPath = `M ${lastBorrow.x} ${lastBorrow.y} ` +
+      borrowPredPoints.map(p => `L ${p.x} ${p.y}`).join(' ')
+  }
+
+  return { 
+    activeLinePath, 
+    activeAreaPath, 
+    borrowLinePath, 
+    borrowAreaPath, 
+    activePredPath, 
+    borrowPredPath, 
+    activePoints, 
+    borrowPoints, 
+    activePredPoints, 
+    borrowPredPoints, 
+    maxVal 
+  }
 })
 
 watch(() => props.allData, (data) => {
@@ -209,6 +310,37 @@ onMounted(() => {
         </div>
         <div class="config-form">
           <div class="form-group">
+            <label>{{ t('predict.predictionDimension') }}</label>
+            <div class="model-options">
+              <button
+                class="model-btn"
+                :class="{ active: predictionDimension === 'active' }"
+                @click="predictionDimension = 'active'"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span>{{ t('predict.activeReaders') }}</span>
+                <small>{{ t('predict.activeReadersDesc') }}</small>
+              </button>
+              <button
+                class="model-btn"
+                :class="{ active: predictionDimension === 'borrow' }"
+                @click="predictionDimension = 'borrow'"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                <span>{{ t('predict.borrowCount') }}</span>
+                <small>{{ t('predict.borrowCountDesc') }}</small>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
             <label>{{ t('predict.predictionModel') }}</label>
             <div class="model-options">
               <button
@@ -274,14 +406,18 @@ onMounted(() => {
       <div v-if="showPrediction && predictionResult" class="card">
         <div class="card-header">
           <h3>{{ t('predict.result') }}</h3>
-          <span class="card-subtitle">{{ activeModel === 'moving_avg' ? t('predict.movingAvgModel') : t('predict.linearRegressionModel') }}</span>
+          <span class="card-subtitle">{{ activeModel === 'moving_avg' ? t('predict.movingAvgModel') : t('predict.linearRegressionModel') }} - {{ predictionDimension === 'active' ? t('predict.activeReaders') : t('predict.borrowCount') }}</span>
         </div>
         <div class="chart-container">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="predict-chart">
             <defs>
-              <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="activeGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
                 <stop offset="100%" stop-color="#6366f1" stop-opacity="0.02"/>
+              </linearGradient>
+              <linearGradient id="borrowGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
               </linearGradient>
             </defs>
             <g class="grid-lines">
@@ -291,26 +427,44 @@ onMounted(() => {
                 stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"
               />
             </g>
-            <path :d="combinedChartPaths.areaPath" fill="url(#actualGrad)" />
-            <path :d="combinedChartPaths.linePath" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-            <path v-if="combinedChartPaths.predPath" :d="combinedChartPaths.predPath" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="8 4" stroke-linecap="round" stroke-linejoin="round" />
-            <g v-for="(pt, idx) in combinedChartPaths.points" :key="'actual-' + idx">
-              <circle :cx="pt.x" :cy="pt.y" r="4" fill="#6366f1" />
-              <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#94a3b8">{{ pt.label }}</text>
+            <g v-if="predictionDimension === 'active'">
+              <path :d="combinedChartPaths.activeAreaPath" fill="url(#activeGrad)" />
+              <path :d="combinedChartPaths.activeLinePath" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path v-if="combinedChartPaths.activePredPath" :d="combinedChartPaths.activePredPath" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="8 4" stroke-linecap="round" stroke-linejoin="round" />
+              <g v-for="(pt, idx) in combinedChartPaths.activePoints" :key="'actual-' + idx">
+                <circle :cx="pt.x" :cy="pt.y" r="4" fill="#6366f1" />
+                <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#94a3b8">{{ pt.label }}</text>
+              </g>
+              <g v-for="(pt, idx) in combinedChartPaths.activePredPoints" :key="'pred-' + idx">
+                <circle :cx="pt.x" :cy="pt.y" r="5" fill="#f59e0b" stroke="white" stroke-width="2" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x" :y1="pt.upper" :x2="pt.x" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.upper" :x2="pt.x + 4" :y2="pt.upper" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.lower" :x2="pt.x + 4" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">{{ pt.label }}</text>
+              </g>
             </g>
-            <g v-for="(pt, idx) in combinedChartPaths.predPoints" :key="'pred-' + idx">
-              <circle :cx="pt.x" :cy="pt.y" r="5" fill="#f59e0b" stroke="white" stroke-width="2" />
-              <line v-if="pt.upper && pt.lower" :x1="pt.x" :y1="pt.upper" :x2="pt.x" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
-              <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.upper" :x2="pt.x + 4" :y2="pt.upper" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
-              <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.lower" :x2="pt.x + 4" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
-              <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">{{ pt.label }}</text>
+            <g v-else>
+              <path :d="combinedChartPaths.borrowAreaPath" fill="url(#borrowGrad)" />
+              <path :d="combinedChartPaths.borrowLinePath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path v-if="combinedChartPaths.borrowPredPath" :d="combinedChartPaths.borrowPredPath" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="8 4" stroke-linecap="round" stroke-linejoin="round" />
+              <g v-for="(pt, idx) in combinedChartPaths.borrowPoints" :key="'actual-' + idx">
+                <circle :cx="pt.x" :cy="pt.y" r="4" fill="#10b981" />
+                <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#94a3b8">{{ pt.label }}</text>
+              </g>
+              <g v-for="(pt, idx) in combinedChartPaths.borrowPredPoints" :key="'pred-' + idx">
+                <circle :cx="pt.x" :cy="pt.y" r="5" fill="#f59e0b" stroke="white" stroke-width="2" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x" :y1="pt.upper" :x2="pt.x" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.upper" :x2="pt.x + 4" :y2="pt.upper" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <line v-if="pt.upper && pt.lower" :x1="pt.x - 4" :y1="pt.lower" :x2="pt.x + 4" :y2="pt.lower" stroke="#f59e0b" stroke-width="1.5" opacity="0.5" />
+                <text :x="pt.x" :y="chartHeight - 8" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">{{ pt.label }}</text>
+              </g>
             </g>
           </svg>
         </div>
 
         <div class="legend-bar">
           <div class="legend-item">
-            <span class="legend-dot actual"></span>
+            <span class="legend-dot actual active"></span>
             <span>{{ t('predict.actualData') }}</span>
           </div>
           <div class="legend-item">
@@ -327,6 +481,7 @@ onMounted(() => {
       <div v-if="showPrediction && predictionResult" class="card">
         <div class="card-header">
           <h3>{{ t('predict.predictionDetail') }}</h3>
+          <span class="card-subtitle">{{ predictionDimension === 'active' ? t('predict.activeReaders') : t('predict.borrowCount') }}</span>
         </div>
         <table class="data-table">
           <thead>
@@ -339,7 +494,7 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in predictionResult" :key="item.month">
+            <tr v-for="item in (predictionDimension === 'active' ? predictionResult.active : predictionResult.borrow)" :key="item.month">
               <td class="name-cell">{{ item.month }}</td>
               <td class="count-cell">{{ formatNumber(item.predicted) }}</td>
               <td>{{ formatNumber(item.lower) }}</td>
@@ -678,8 +833,12 @@ onMounted(() => {
   border-radius: 50%;
 }
 
-.legend-dot.actual {
+.legend-dot.actual.active {
   background: #6366f1;
+}
+
+.legend-dot.actual.borrow {
+  background: #10b981;
 }
 
 .legend-dot.predicted {

@@ -1,0 +1,18 @@
+import nav from './nav'
+import common from './common'
+import overview from './overview'
+import months from './months'
+import degree from './degree'
+import reader from './reader'
+import book from './book'
+import borrow from './borrow'
+import category from './category'
+import trend from './trend'
+import predict from './predict'
+import report from './report'
+import settings from './settings'
+import login from './login'
+import register from './register'
+import library from './library'
+
+export default { nav, common, overview, months, degree, reader, book, borrow, category, trend, predict, report, settings, login, register, library }

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatNumber } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -49,11 +50,6 @@ const chartRetryCount = reactive({
   activity: 0,
   today: 0
 })
-
-const formatNumber = (num) => {
-  if (!num && num !== 0) return '0'
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
 
 const statsCards = computed(() => {
   const s = props.allData?.overview?.stats

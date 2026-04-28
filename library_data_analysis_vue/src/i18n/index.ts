@@ -1,34 +1,49 @@
 import { createI18n } from 'vue-i18n'
+import type { SupportedLocale } from './types'
+import { LOCALE_CONFIG } from './types'
 import zhCN from './locales/zh-CN'
-import zhTW from './locales/zh-TW'
-import en from './locales/en'
-import ja from './locales/ja'
 
-const savedLocale = localStorage.getItem('locale') || 'zh-CN'
+const savedLocale = (localStorage.getItem('locale') || 'zh-CN') as SupportedLocale
 
 const i18n = createI18n({
   legacy: false,
   locale: savedLocale,
   fallbackLocale: 'zh-CN',
   messages: {
-    'zh-CN': zhCN,
-    'zh-TW': zhTW,
-    'en': en,
-    'ja': ja
+    'zh-CN': zhCN
   }
 })
 
-export default i18n
+const loadedLocales: Set<SupportedLocale> = new Set(['zh-CN'])
 
-export const SUPPORTED_LOCALES = [
-  { code: 'zh-CN', name: '简体中文', nativeName: 'Simplified Chinese', flag: '🇨🇳' },
-  { code: 'zh-TW', name: '繁體中文', nativeName: 'Traditional Chinese', flag: '🇹🇼' },
-  { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
-  { code: 'ja', name: '日本語', nativeName: 'Japanese', flag: '🇯🇵' }
-]
+const localeModules: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
+  'zh-TW': () => import('./locales/zh-TW'),
+  'en': () => import('./locales/en'),
+  'ja': () => import('./locales/ja')
+}
 
-export function setLocale(code: string) {
+export async function loadLocaleMessages(locale: SupportedLocale): Promise<void> {
+  if (loadedLocales.has(locale)) return
+
+  const loader = localeModules[locale]
+  if (!loader) return
+
+  const module = await loader()
+  i18n.global.setLocaleMessage(locale, module.default as Record<string, unknown>)
+  loadedLocales.add(locale)
+}
+
+export async function setLocale(code: SupportedLocale): Promise<void> {
+  await loadLocaleMessages(code)
   i18n.global.locale.value = code
   localStorage.setItem('locale', code)
   document.documentElement.setAttribute('lang', code)
 }
+
+export const SUPPORTED_LOCALES = LOCALE_CONFIG
+
+if (savedLocale !== 'zh-CN') {
+  loadLocaleMessages(savedLocale)
+}
+
+export default i18n

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Depends, Request
 from datetime import datetime
 import jwt
 
-from app.database import get_db_connection
+from app.database import get_db
 from app.auth import (
     hash_password, verify_password, validate_username, validate_password,
-    create_access_token, create_captcha, verify_captcha
+    create_access_token, create_captcha, verify_captcha, revoke_token, get_current_user
 )
 from app.config import SECRET_KEY, ALGORITHM
 
@@ -18,7 +18,7 @@ async def get_captcha():
 
 
 @router.post("/register")
-async def register(username: str = Form(...), password: str = Form(...)):
+async def register(username: str = Form(...), password: str = Form(...), conn=Depends(get_db)):
     is_valid, error_msg = validate_username(username)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
@@ -27,7 +27,6 @@ async def register(username: str = Form(...), password: str = Form(...)):
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
 
-    conn = get_db_connection()
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM users WHERE username = %s", (username,))
@@ -56,8 +55,6 @@ async def register(username: str = Form(...), password: str = Form(...)):
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"注册失败，请稍后重试: {str(e)}")
-    finally:
-        conn.close()
 
 
 @router.post("/login")
@@ -65,42 +62,39 @@ async def login(
     username: str = Form(...),
     password: str = Form(...),
     captcha: str = Form(...),
-    captcha_key: str = Form(...)
+    captcha_key: str = Form(...),
+    conn=Depends(get_db)
 ):
     verify_captcha(captcha_key, captcha)
 
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, username, password_hash, role FROM users WHERE username = %s",
-                (username,)
-            )
-            user = cur.fetchone()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, username, password_hash, role FROM users WHERE username = %s",
+            (username,)
+        )
+        user = cur.fetchone()
 
-            if not user:
-                raise HTTPException(status_code=401, detail="用户名或密码错误")
+        if not user:
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-            user_id, db_username, password_hash, role = user
+        user_id, db_username, password_hash, role = user
 
-            if not verify_password(password, password_hash):
-                raise HTTPException(status_code=401, detail="用户名或密码错误")
+        if not verify_password(password, password_hash):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-            system = "library" if role != "admin" else "analysis"
+        system = "library" if role != "admin" else "analysis"
 
-            access_token = create_access_token(
-                data={"sub": db_username, "role": role}
-            )
+        access_token = create_access_token(
+            data={"sub": db_username, "role": role}
+        )
 
-            return {
-                "access_token": access_token,
-                "token_type": "bearer",
-                "username": db_username,
-                "role": role,
-                "system": system
-            }
-    finally:
-        conn.close()
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "username": db_username,
+            "role": role,
+            "system": system
+        }
 
 
 @router.get("/me")
@@ -114,3 +108,12 @@ async def get_current_user_info(token: str):
         return {"username": username, "role": role}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="无效的token")
+
+
+@router.post("/logout")
+async def logout(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        revoke_token(token)
+    return {"message": "注销成功"}

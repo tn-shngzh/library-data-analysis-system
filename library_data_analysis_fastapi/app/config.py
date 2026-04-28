@@ -1,6 +1,12 @@
 import os
+from dotenv import load_dotenv
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
@@ -9,12 +15,12 @@ DB_CONFIG = {
     "port": os.getenv("DB_PORT", "5432"),
     "dbname": os.getenv("DB_NAME", "library_db"),
     "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "GXYL2405")
+    "password": os.getenv("DB_PASSWORD")
 }
+if not DB_CONFIG["password"]:
+    raise RuntimeError("DB_PASSWORD environment variable is required")
 
-CORS_ORIGINS = [
-    "http://localhost:5174",
-]
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5174").split(",")
 
 education_levels = {
     '1a': '研究生', '1b': '本科', '1c': '大专', '1d': '高中',
