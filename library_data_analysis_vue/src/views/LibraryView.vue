@@ -7,6 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useTime } from '@/composables/useTime'
 import { useDropdown } from '@/composables/useDropdown'
 import { useSearch } from '@/composables/useSearch'
+import { useToast } from '@/composables/useToast'
 import { getCache, setCache } from '@/utils/cache'
 
 const { t } = useI18n()
@@ -15,9 +16,12 @@ const { username, role, checkAuth, logout } = useAuth()
 const { currentTime } = useTime()
 const { showDropdown, dropdownRef: userMenuRef, toggleDropdown, closeDropdown } = useDropdown()
 const { searchKeyword, searchResults, searchLoading: isSearching, performSearch, resetSearch } = useSearch()
+const { showToast } = useToast()
 
 const dataLoaded = ref(false)
+const loadError = ref(false)
 const activeTab = ref('home')
+const loadingStats = ref(false)
 
 const libraryData = reactive({
   stats: null,
@@ -69,31 +73,61 @@ const preloadData = async () => {
     return
   }
   
-  try {
-    const data = await libraryApi.getHomeData()
-    libraryData.stats = data.stats
-    libraryData.hotBooks = data.hotBooks
-    libraryData.recentBorrows = data.recentBorrows
-    libraryData.categories = data.categories
-
-    setCache('libraryData', {
-      stats: libraryData.stats,
-      hotBooks: libraryData.hotBooks,
-      recentBorrows: libraryData.recentBorrows,
-      categories: libraryData.categories
-    })
-    
-    dataLoaded.value = true
-  } catch (e) {
-    console.error('加载数据失败', e)
-    if (cached) {
-      libraryData.stats = cached.stats
-      libraryData.hotBooks = cached.hotBooks
-      libraryData.recentBorrows = cached.recentBorrows
-      libraryData.categories = cached.categories
-    }
-    dataLoaded.value = true
+  loadingStats.value = true
+  loadError.value = false
+  
+  const results = {}
+  const endpoints = {
+    stats: '/api/borrows/stats',
+    hotBooks: '/api/books/hot',
+    recentBorrows: '/api/borrows/recent',
+    categories: '/api/books/categories'
   }
+  
+  for (const [key, endpoint] of Object.entries(endpoints)) {
+    try {
+      console.log(`[Library] Loading ${key} from ${endpoint}`)
+      const res = await fetch(endpoint)
+      if (res.ok) {
+        const data = await res.json()
+        results[key] = data
+        console.log(`[Library] ${key} loaded successfully`)
+      } else {
+        console.warn(`[Library] Failed to load ${key}: ${res.status}`)
+      }
+    } catch (e) {
+      console.error(`[Library] Error loading ${key}:`, e)
+    }
+  }
+  
+  libraryData.stats = results.stats || null
+  libraryData.hotBooks = results.hotBooks || null
+  libraryData.recentBorrows = results.recentBorrows || null
+  libraryData.categories = results.categories || null
+
+  setCache('libraryData', {
+    stats: libraryData.stats,
+    hotBooks: libraryData.hotBooks,
+    recentBorrows: libraryData.recentBorrows,
+    categories: libraryData.categories
+  })
+  
+  loadingStats.value = false
+  dataLoaded.value = true
+  
+  const successCount = Object.keys(results).length
+  const totalCount = Object.keys(endpoints).length
+  if (successCount === 0) {
+    loadError.value = true
+    console.error('[Library] All endpoints failed to load')
+  } else if (successCount < totalCount) {
+    console.warn(`[Library] Only ${successCount}/${totalCount} endpoints loaded successfully`)
+  }
+}
+
+const retryLoad = async () => {
+  loadError.value = false
+  await preloadData()
 }
 
 const loadMyBorrows = async () => {
@@ -132,15 +166,57 @@ const handleBorrow = async (bookId) => {
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        alert(t('library.borrowSuccess'))
+        showToast(t('library.borrowSuccess'))
         preloadData()
+        loadMyBorrows()
       }
     } else {
       const err = await res.json()
-      alert(err.detail || t('library.borrowFailed'))
+      showToast(err.detail || t('library.borrowFailed'), 'error')
     }
   } catch (e) {
-    alert(t('library.networkError'))
+    showToast(t('library.networkError'), 'error')
+  }
+}
+
+const handleReturn = async (bookId) => {
+  try {
+    const res = await libraryApi.returnBook(bookId)
+    if (res.ok) {
+      const result = await res.json()
+      if (result.success) {
+        showToast(t('library.returnSuccess'))
+        preloadData()
+        loadMyBorrows()
+      } else {
+        showToast(result.detail || t('library.returnFailed'), 'error')
+      }
+    } else {
+      const err = await res.json()
+      showToast(err.detail || t('library.returnFailed'), 'error')
+    }
+  } catch (e) {
+    showToast(t('library.returnFailed'), 'error')
+  }
+}
+
+const handleRenew = async (bookId) => {
+  try {
+    const res = await libraryApi.renewBook(bookId)
+    if (res.ok) {
+      const result = await res.json()
+      if (result.success) {
+        showToast(t('library.renewSuccess'))
+        loadMyBorrows()
+      } else {
+        showToast(result.detail || t('library.renewFailed'), 'error')
+      }
+    } else {
+      const err = await res.json()
+      showToast(err.detail || t('library.renewFailed'), 'error')
+    }
+  } catch (e) {
+    showToast(t('library.renewFailed'), 'error')
   }
 }
 
@@ -180,10 +256,10 @@ onMounted(async () => {
           <span class="date">{{ currentTime }}</span>
         </div>
         <div class="user-menu" ref="userMenuRef">
-          <div class="avatar" @click="toggleDropdown">
+          <div class="avatar" @click.stop="toggleDropdown">
             <span class="avatar-text">{{ username.charAt(0).toUpperCase() }}</span>
           </div>
-          <div class="user-details" @click="toggleDropdown">
+          <div class="user-details" @click.stop="toggleDropdown">
             <span class="user-name">{{ username }}</span>
             <span class="user-role-badge user">{{ t('common.user') }}</span>
           </div>
@@ -242,7 +318,7 @@ onMounted(async () => {
             </div>
           </transition>
           
-          <button @click="logout" class="logout-btn" :title="t('common.logout')">
+          <button @click="logout" class="logout-btn btn-icon btn-ghost" :title="t('common.logout')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/>
@@ -286,6 +362,20 @@ onMounted(async () => {
           <span class="loading-text">{{ t('library.loadingData') }}</span>
         </div>
 
+        <div v-else-if="loadError" class="error-overlay">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="64" height="64" class="error-icon">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          <h3>{{ t('library.dataLoadFailed') }}</h3>
+          <p>{{ t('library.someDataFailed') }}</p>
+          <button @click="retryLoad" class="retry-btn btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            {{ t('library.retry') }}
+          </button>
+        </div>
+
         <div v-else class="content-area">
           <div v-if="activeTab === 'home'" class="tab-content">
             <div class="welcome-banner">
@@ -295,10 +385,10 @@ onMounted(async () => {
               </div>
               <div class="welcome-decoration">
                 <svg viewBox="0 0 200 200" width="120" height="120">
-                  <circle cx="100" cy="100" r="80" fill="rgba(99, 102, 241, 0.1)"/>
-                  <circle cx="100" cy="100" r="60" fill="rgba(99, 102, 241, 0.15)"/>
-                  <path d="M80 70h40v60H80z" fill="rgba(99, 102, 241, 0.3)" rx="4"/>
-                  <path d="M85 75h30v50H85z" fill="rgba(99, 102, 241, 0.5)"/>
+                  <circle cx="100" cy="100" r="80" fill="rgba(217, 119, 6, 0.1)"/>
+                  <circle cx="100" cy="100" r="60" fill="rgba(217, 119, 6, 0.15)"/>
+                  <path d="M80 70h40v60H80z" fill="rgba(217, 119, 6, 0.3)" rx="4"/>
+                  <path d="M85 75h30v50H85z" fill="rgba(217, 119, 6, 0.5)"/>
                 </svg>
               </div>
             </div>
@@ -323,7 +413,7 @@ onMounted(async () => {
                   </svg>
                 </div>
                 <div class="stat-info">
-                  <div class="stat-value">{{ libraryData.stats?.cko_count || 0 }}</div>
+                  <div class="stat-value">{{ libraryData.stats?.borrowed_books || 0 }}</div>
                   <div class="stat-label">{{ t('library.statBorrowed') }}</div>
                 </div>
               </div>
@@ -347,8 +437,54 @@ onMounted(async () => {
                   </svg>
                 </div>
                 <div class="stat-info">
-                  <div class="stat-value">{{ libraryData.categories?.length || 0 }}</div>
+                  <div class="stat-value">{{ libraryData.stats?.category_count || libraryData.categories?.length || 0 }}</div>
                   <div class="stat-label">{{ t('library.statCategories') }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="role !== 'admin' && libraryData.stats?.my_borrows !== undefined" class="personal-stats">
+              <h3 class="section-title">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+                {{ t('library.myStats') }}
+              </h3>
+              <div class="stats-overview">
+                <div class="stat-card personal">
+                  <div class="stat-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                      <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
+                    </svg>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-value">{{ libraryData.stats?.my_borrows || 0 }}</div>
+                    <div class="stat-label">{{ t('library.statMyBorrows') }}</div>
+                  </div>
+                </div>
+
+                <div class="stat-card personal">
+                  <div class="stat-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                      <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                    </svg>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-value">{{ libraryData.stats?.my_returns || 0 }}</div>
+                    <div class="stat-label">{{ t('library.statMyReturns') }}</div>
+                  </div>
+                </div>
+
+                <div class="stat-card personal">
+                  <div class="stat-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                      <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
+                    </svg>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-value">{{ libraryData.stats?.my_current_borrowed || 0 }}</div>
+                    <div class="stat-label">{{ t('library.statMyCurrentBorrowed') }}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -371,7 +507,7 @@ onMounted(async () => {
                         <span class="hot-book-count">{{ t('library.borrowCount', { count: book.borrow_count }) }}</span>
                       </div>
                     </div>
-                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="quick-borrow-btn">{{ t('library.borrow') }}</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="quick-borrow-btn btn btn-primary btn-sm">{{ t('library.borrow') }}</button>
                   </div>
                 </div>
               </div>
@@ -410,7 +546,7 @@ onMounted(async () => {
                   :placeholder="t('library.searchPlaceholder')"
                   class="search-input"
                 />
-                <button @click="handleSearch" class="search-button" :disabled="isSearching">
+                <button @click="handleSearch" class="search-button btn btn-primary btn-lg" :disabled="isSearching">
                   <svg v-if="!isSearching" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                   </svg>
@@ -438,7 +574,7 @@ onMounted(async () => {
                       <span class="result-category">{{ book.category }}</span>
                       <span class="result-count">{{ t('library.borrowCount', { count: book.borrow_count }) }}</span>
                     </div>
-                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="result-borrow-btn">{{ t('library.borrowNow') }}</button>
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="result-borrow-btn btn btn-primary btn-sm">{{ t('library.borrowNow') }}</button>
                   </div>
                 </div>
               </div>
@@ -476,7 +612,7 @@ onMounted(async () => {
                         <span class="hot-stat-label">{{ t('library.borrowCountShort') }}</span>
                       </div>
                     </div>
-                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="hot-borrow-btn">
+                    <button v-if="role !== 'admin'" @click="handleBorrow(book.bib_id)" class="hot-borrow-btn btn btn-primary btn-sm">
                       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
@@ -517,6 +653,10 @@ onMounted(async () => {
                     <div class="mybook-date-value">{{ record.date }}</div>
                     <div class="mybook-time">{{ record.time }}</div>
                   </div>
+                  <div v-if="record.action === 'CKO' && role !== 'admin'" class="mybook-actions">
+                    <button class="action-btn return-btn btn btn-danger btn-sm" @click="handleReturn(record.bib_id)">{{ t('library.returnBook') }}</button>
+                    <button class="action-btn renew-btn" @click="handleRenew(record.bib_id)">{{ t('library.renewBook') }}</button>
+                  </div>
                 </div>
               </div>
 
@@ -526,7 +666,7 @@ onMounted(async () => {
                 </svg>
                 <h3>{{ t('library.noBorrowRecords') }}</h3>
                 <p>{{ role === 'admin' ? t('library.noBorrowRecordsAdmin') : t('library.noBorrowRecordsUser') }}</p>
-                <button @click="activeTab = 'search'" class="go-search-btn">
+                <button @click="activeTab = 'search'" class="go-search-btn btn btn-primary btn-sm">
                   <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                   </svg>
@@ -824,28 +964,9 @@ onMounted(async () => {
   transform: translateY(-8px) scale(0.96);
 }
 
-.logout-btn {
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  color: var(--color-neutral-400);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-base);
-}
-
 .logout-btn svg {
   width: 18px;
   height: 18px;
-}
-
-.logout-btn:hover {
-  background: var(--color-danger-50);
-  color: var(--color-danger-500);
 }
 
 .layout {
@@ -972,6 +1093,38 @@ onMounted(async () => {
   font-size: var(--text-sm);
 }
 
+.error-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.error-icon {
+  color: var(--color-warning-400);
+}
+
+.error-overlay h3 {
+  color: var(--color-neutral-800);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  margin: 0;
+}
+
+.error-overlay p {
+  color: var(--color-neutral-500);
+  font-size: var(--text-sm);
+  margin: 0;
+  max-width: 400px;
+}
+
+.retry-btn svg {
+  animation: spin 1s linear infinite;
+}
+
 .content-area {
   max-width: 1200px;
   margin: 0 auto;
@@ -1070,6 +1223,25 @@ onMounted(async () => {
 .stat-card.info .stat-icon {
   background: var(--color-info-50);
   color: var(--color-info-500);
+}
+
+.stat-card.personal .stat-icon {
+  background: rgba(217, 119, 6, 0.1);
+  color: var(--color-warning-500);
+}
+
+.personal-stats {
+  margin-bottom: var(--space-6);
+}
+
+.personal-stats .section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--color-neutral-800);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .stat-info {
@@ -1172,21 +1344,7 @@ onMounted(async () => {
 }
 
 .quick-borrow-btn {
-  padding: var(--space-2) var(--space-3);
-  background: var(--gradient-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  transition: all var(--transition-base);
   flex-shrink: 0;
-}
-
-.quick-borrow-btn:hover {
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-1px);
 }
 
 .recent-borrows-list {
@@ -1273,31 +1431,6 @@ onMounted(async () => {
   box-shadow: 0 0 0 3px var(--color-primary-100);
 }
 
-.search-button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 14px var(--space-6);
-  background: var(--gradient-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-size: var(--text-base);
-  font-weight: var(--font-medium);
-  transition: all var(--transition-base);
-}
-
-.search-button:hover:not(:disabled) {
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-1px);
-}
-
-.search-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .search-loading {
   width: 16px;
   height: 16px;
@@ -1382,19 +1515,6 @@ onMounted(async () => {
 
 .result-borrow-btn {
   width: 100%;
-  padding: var(--space-3);
-  background: var(--gradient-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: var(--font-medium);
-  transition: all var(--transition-base);
-}
-
-.result-borrow-btn:hover {
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-1px);
 }
 
 .search-empty {
@@ -1495,25 +1615,8 @@ onMounted(async () => {
 }
 
 .hot-borrow-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
   width: 100%;
-  padding: var(--space-2);
-  background: var(--gradient-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  transition: all var(--transition-base);
-}
-
-.hot-borrow-btn:hover {
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-1px);
+  gap: var(--space-1);
 }
 
 .mybooks-list {
@@ -1623,6 +1726,27 @@ onMounted(async () => {
   color: var(--color-neutral-400);
 }
 
+.mybook-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  margin-right: 4px;
+}
+
+.renew-btn {
+  background: var(--color-info-500);
+  color: var(--color-neutral-0);
+}
+
 .mybooks-empty {
   text-align: center;
   padding: var(--space-12) 0;
@@ -1636,25 +1760,6 @@ onMounted(async () => {
 
 .mybooks-empty p {
   margin: 0 0 var(--space-6);
-}
-
-.go-search-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-6);
-  background: var(--gradient-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-weight: var(--font-medium);
-  transition: all var(--transition-base);
-}
-
-.go-search-btn:hover {
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-1px);
 }
 
 @media (max-width: 1024px) {

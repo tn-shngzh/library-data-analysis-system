@@ -8,8 +8,14 @@ router = APIRouter(prefix="/api/borrows", tags=["借阅分析"])
 
 
 @router.get("/stats")
-async def get_borrow_stats(conn=Depends(get_db)):
+async def get_borrow_stats(request: Request, conn=Depends(get_db)):
+    username = get_current_user(request)
+
     with conn.cursor() as cur:
+        cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        role = user[0] if user else 'user'
+
         cur.execute("""
             SELECT total_actions, total_borrows, total_returns,
                    total_renewals, active_borrowers, borrowed_books
@@ -17,41 +23,103 @@ async def get_borrow_stats(conn=Depends(get_db)):
         """)
         row = cur.fetchone()
         if row:
-            return {
-                "total_actions": row[0],
-                "total_borrows": row[1],
-                "total_returns": row[2],
-                "total_renewals": row[3],
-                "active_borrowers": row[4],
-                "borrowed_books": row[5]
-            }
+            total_actions = row[0]
+            total_borrows = row[1]
+            total_returns = row[2]
+            total_renewals = row[3]
+            active_borrowers = row[4]
+            borrowed_books = row[5]
+        else:
+            cur.execute("SELECT COUNT(*) FROM circulations")
+            total_actions = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM circulations")
-        total_actions = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKO'")
+            total_borrows = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKO'")
-        total_borrows = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKI'")
+            total_returns = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM circulations WHERE action = 'CKI'")
-        total_returns = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM circulations WHERE action IN ('REH', 'REI')")
+            total_renewals = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM circulations WHERE action IN ('REH', 'REI')")
-        total_renewals = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(DISTINCT borrower_id) FROM circulations WHERE action = 'CKO'")
+            active_borrowers = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(DISTINCT borrower_id) FROM circulations WHERE action = 'CKO'")
-        active_borrowers = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE action = 'CKO'")
+            borrowed_books = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE action = 'CKO'")
-        borrowed_books = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM book_categories")
+        total_books = cur.fetchone()[0]
 
-        return {
+        cur.execute("SELECT COUNT(*) FROM borrowers")
+        total_readers = cur.fetchone()[0]
+
+        today = int(datetime.now().strftime('%Y%m%d'))
+        cur.execute("SELECT COUNT(*) FROM circulations WHERE action_date = %s", (today,))
+        today_visits = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM circulations WHERE action_date = %s AND action = 'CKO'", (today,))
+        today_borrows = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM circulations WHERE action_date = %s AND action = 'CKI'", (today,))
+        today_returns = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(DISTINCT category) FROM book_categories")
+        category_count = cur.fetchone()[0]
+
+        result = {
             "total_actions": total_actions,
             "total_borrows": total_borrows,
             "total_returns": total_returns,
             "total_renewals": total_renewals,
             "active_borrowers": active_borrowers,
-            "borrowed_books": borrowed_books
+            "borrowed_books": borrowed_books,
+            "total_books": total_books,
+            "total_readers": total_readers,
+            "today_visits": today_visits,
+            "today_borrows": today_borrows,
+            "today_returns": today_returns,
+            "category_count": category_count,
+            "cko_count": total_borrows,
+            "cki_count": total_returns,
+            "reh_count": 0,
+            "rei_count": total_renewals,
+            "role": role
         }
+
+        if role == 'user':
+            cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
+            borrower = cur.fetchone()
+            if borrower:
+                borrower_id = borrower[0]
+
+                cur.execute(
+                    "SELECT COUNT(*) FROM circulations WHERE borrower_id = %s AND action = 'CKO'",
+                    (borrower_id,)
+                )
+                my_borrows = cur.fetchone()[0]
+
+                cur.execute(
+                    "SELECT COUNT(*) FROM circulations WHERE borrower_id = %s AND action = 'CKI'",
+                    (borrower_id,)
+                )
+                my_returns = cur.fetchone()[0]
+
+                cur.execute(
+                    "SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE borrower_id = %s AND action = 'CKO' AND NOT EXISTS (SELECT 1 FROM circulations c2 WHERE c2.borrower_id = circulations.borrower_id AND c2.bib_id = circulations.bib_id AND c2.action = 'CKI' AND c2.action_date >= circulations.action_date)",
+                    (borrower_id,)
+                )
+                my_current_borrowed = cur.fetchone()[0]
+
+                result["my_borrows"] = my_borrows
+                result["my_returns"] = my_returns
+                result["my_current_borrowed"] = my_current_borrowed
+            else:
+                result["my_borrows"] = 0
+                result["my_returns"] = 0
+                result["my_current_borrowed"] = 0
+
+        return result
 
 
 @router.get("/action-stats")
@@ -233,8 +301,20 @@ async def borrow_book(request: Request, conn=Depends(get_db)):
             raise HTTPException(status_code=404, detail="读者不存在")
 
         borrower_id = borrower[0]
-        action_date = datetime.now().date()
-        action_time = datetime.now().time()
+        action_date = int(datetime.now().strftime('%Y%m%d'))
+        action_time = datetime.now().strftime('%H:%M:%S')
+
+        cur.execute("""
+            SELECT COUNT(*) FROM circulations
+            WHERE borrower_id = %s AND bib_id = %s AND action = 'CKO'
+            AND NOT EXISTS (
+                SELECT 1 FROM circulations c2
+                WHERE c2.borrower_id = c.borrower_id AND c2.bib_id = c.bib_id
+                AND c2.action = 'CKI' AND c2.action_date >= c.action_date
+            )
+        """, (borrower_id, book_id))
+        if cur.fetchone()[0] > 0:
+            raise HTTPException(status_code=400, detail="您已借阅此书且尚未归还")
 
         cur.execute("""
             INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
@@ -244,6 +324,16 @@ async def borrow_book(request: Request, conn=Depends(get_db)):
 
         circ_id = cur.fetchone()[0]
         conn.commit()
+
+        try:
+            for mv in ['mv_borrow_stats', 'mv_daily_borrow_trend', 'mv_monthly_active']:
+                try:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
+                except Exception:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW {mv}")
+            conn.commit()
+        except Exception:
+            pass
 
         return {"success": True, "circulation_id": circ_id}
 
@@ -271,8 +361,20 @@ async def return_book(request: Request, conn=Depends(get_db)):
             raise HTTPException(status_code=404, detail="读者不存在")
 
         borrower_id = borrower[0]
-        action_date = datetime.now().date()
-        action_time = datetime.now().time()
+        action_date = int(datetime.now().strftime('%Y%m%d'))
+        action_time = datetime.now().strftime('%H:%M:%S')
+
+        cur.execute("""
+            SELECT COUNT(*) FROM circulations
+            WHERE borrower_id = %s AND bib_id = %s AND action = 'CKO'
+            AND NOT EXISTS (
+                SELECT 1 FROM circulations c2
+                WHERE c2.borrower_id = c.borrower_id AND c2.bib_id = c.bib_id
+                AND c2.action = 'CKI' AND c2.action_date >= c.action_date
+            )
+        """, (borrower_id, book_id))
+        if cur.fetchone()[0] == 0:
+            raise HTTPException(status_code=400, detail="未找到该书的借阅记录")
 
         cur.execute("""
             INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
@@ -283,7 +385,78 @@ async def return_book(request: Request, conn=Depends(get_db)):
         circ_id = cur.fetchone()[0]
         conn.commit()
 
+        try:
+            for mv in ['mv_borrow_stats', 'mv_daily_borrow_trend', 'mv_monthly_active']:
+                try:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
+                except Exception:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW {mv}")
+            conn.commit()
+        except Exception:
+            pass
+
         return {"success": True, "circulation_id": circ_id}
+
+
+@router.post("/renew")
+async def renew_book(request: Request, conn=Depends(get_db)):
+    username = get_current_user(request)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        role = user[0] if user else 'user'
+
+        if role == 'admin':
+            raise HTTPException(status_code=403, detail="管理员账号无法续借")
+
+        body = await request.json()
+        book_id = body.get("book_id")
+        if not book_id:
+            raise HTTPException(status_code=400, detail="缺少图书 ID")
+
+        cur.execute("SELECT id FROM borrowers WHERE name = %s", (username,))
+        borrower = cur.fetchone()
+        if not borrower:
+            raise HTTPException(status_code=404, detail="读者不存在")
+
+        borrower_id = borrower[0]
+
+        cur.execute("""
+            SELECT COUNT(*) FROM circulations
+            WHERE borrower_id = %s AND bib_id = %s AND action = 'CKO'
+            AND NOT EXISTS (
+                SELECT 1 FROM circulations c2
+                WHERE c2.borrower_id = c.borrower_id AND c2.bib_id = c.bib_id
+                AND c2.action = 'CKI' AND c2.action_date >= c.action_date
+            )
+        """, (borrower_id, book_id))
+        if cur.fetchone()[0] == 0:
+            raise HTTPException(status_code=400, detail="未找到该书的借阅记录，无法续借")
+
+        action_date = int(datetime.now().strftime('%Y%m%d'))
+        action_time = datetime.now().strftime('%H:%M:%S')
+
+        cur.execute("""
+            INSERT INTO circulations (bib_id, borrower_id, action, action_date, action_time)
+            VALUES (%s, %s, 'REH', %s, %s)
+            RETURNING id
+        """, (book_id, borrower_id, action_date, action_time))
+
+        circ_id = cur.fetchone()[0]
+        conn.commit()
+
+        try:
+            for mv in ['mv_borrow_stats', 'mv_daily_borrow_trend', 'mv_monthly_active']:
+                try:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
+                except Exception:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW {mv}")
+            conn.commit()
+        except Exception:
+            pass
+
+        return {"success": True, "message": "续借成功"}
 
 
 @router.get("/my")

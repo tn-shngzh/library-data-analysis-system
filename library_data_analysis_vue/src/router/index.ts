@@ -56,11 +56,6 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  if (to.path === '/settings' && role === 'admin') {
-    next('/dashboard')
-    return
-  }
-
   next()
 })
 

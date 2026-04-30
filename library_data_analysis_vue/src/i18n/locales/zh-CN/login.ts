@@ -41,5 +41,7 @@ export default {
   captchaConnectFail: '无法连接验证码服务',
   captchaRequired: '请输入验证码',
   loginFailed: '登录失败',
-  networkError: '网络错误，请重试'
+  networkError: '网络错误，请检查连接后重试',
+  requestTimeout: '请求超时，请重试',
+  fillRequired: '请填写完整的登录信息',
 }

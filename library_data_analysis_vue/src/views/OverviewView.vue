@@ -12,7 +12,6 @@ const props = defineProps({
   }
 })
 
-const activeTrendTab = ref('monthly')
 const highlightedCategory = ref(null)
 const highlightedBorrowType = ref(null)
 const highlightedReaderActivity = ref(null)
@@ -55,36 +54,48 @@ const statsCards = computed(() => {
   const s = props.allData?.overview?.stats
   if (!s) {
     return [
-      { key: 'total_flow', label: t('overview.totalFlow'), value: '-', change: '-', changeType: 'up', icon: 'book', color: '#6366f1' },
+      { key: 'total_flow', label: t('overview.totalFlow'), value: '-', change: '-', changeType: 'up', icon: 'book', color: '#d97706' },
       { key: 'registered_readers', label: t('overview.registeredReaders'), value: '-', change: '-', changeType: 'up', icon: 'users', color: '#3b82f6' },
       { key: 'active_readers', label: t('overview.activeReaders'), value: '-', change: '-', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
       { key: 'books_in_library', label: t('overview.booksInLibrary'), value: '-', change: '-', changeType: 'up', icon: 'archive', color: '#10b981' },
       { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
       { key: 'returned_books', label: t('overview.returnedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
-      { key: 'library_visits', label: t('overview.libraryRenewals'), value: '-', change: '-', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
-      { key: 'online_renewals', label: t('overview.onlineRenewals'), value: '-', change: '-', changeType: 'up', icon: 'wifi', color: '#6366f1' }
+      { key: 'library_visits', label: t('overview.libraryRenewals'), value: '-', change: '-', changeType: 'up', icon: 'refresh', color: '#059669' },
+      { key: 'online_renewals', label: t('overview.onlineRenewals'), value: '-', change: '-', changeType: 'up', icon: 'wifi', color: '#d97706' }
     ]
   }
+  const yoy = s?.yoy_changes || {}
+  const fmtChange = (key) => {
+    const val = yoy[key]
+    if (val === null || val === undefined) return t('common.noData')
+    const sign = val >= 0 ? '+' : ''
+    return `${sign}${val}%`
+  }
+  const fmtChangeType = (key) => {
+    const val = yoy[key]
+    if (val === null || val === undefined) return 'neutral'
+    return val >= 0 ? 'up' : 'down'
+  }
   return [
-    { key: 'total_flow', label: t('overview.totalFlow'), value: formatNumber(s.total_borrows || 0), change: '+12.5%', changeType: 'up', icon: 'book', color: '#6366f1' },
-    { key: 'registered_readers', label: t('overview.registeredReaders'), value: formatNumber(s.total_readers || 0), change: '+8.2%', changeType: 'up', icon: 'users', color: '#3b82f6' },
-    { key: 'active_readers', label: t('overview.activeReaders'), value: formatNumber(s.active_readers || 0), change: '+15.3%', changeType: 'up', icon: 'user-check', color: '#06b6d4' },
-    { key: 'books_in_library', label: t('overview.booksInLibrary'), value: formatNumber(s.total_books || 0), change: '+6.7%', changeType: 'up', icon: 'archive', color: '#10b981' },
-    { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: formatNumber(s.cko_count || 0), change: '+10.1%', changeType: 'up', icon: 'arrow-up', color: '#f59e0b' },
-    { key: 'returned_books', label: t('overview.returnedBooks'), value: formatNumber(s.cki_count || 0), change: '+9.3%', changeType: 'up', icon: 'arrow-down', color: '#ef4444' },
-    { key: 'library_visits', label: t('overview.libraryRenewals'), value: formatNumber(s.reh_count || 0), change: '+6.8%', changeType: 'up', icon: 'refresh', color: '#8b5cf6' },
-    { key: 'online_renewals', label: t('overview.onlineRenewals'), value: formatNumber(s.rei_count || 0), change: '+18.2%', changeType: 'up', icon: 'wifi', color: '#6366f1' }
+    { key: 'total_flow', label: t('overview.totalFlow'), value: formatNumber(s.total_borrows || 0), change: fmtChange('total_borrows'), changeType: fmtChangeType('total_borrows'), icon: 'book', color: '#d97706' },
+    { key: 'registered_readers', label: t('overview.registeredReaders'), value: formatNumber(s.total_readers || 0), change: '-', changeType: 'neutral', icon: 'users', color: '#3b82f6' },
+    { key: 'active_readers', label: t('overview.activeReaders'), value: formatNumber(s.active_readers || 0), change: fmtChange('active_readers'), changeType: fmtChangeType('active_readers'), icon: 'user-check', color: '#06b6d4' },
+    { key: 'books_in_library', label: t('overview.booksInLibrary'), value: formatNumber(s.total_books || 0), change: '-', changeType: 'neutral', icon: 'archive', color: '#10b981' },
+    { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: formatNumber(s.cko_count || 0), change: fmtChange('cko_count'), changeType: fmtChangeType('cko_count'), icon: 'arrow-up', color: '#f59e0b' },
+    { key: 'returned_books', label: t('overview.returnedBooks'), value: formatNumber(s.cki_count || 0), change: fmtChange('cki_count'), changeType: fmtChangeType('cki_count'), icon: 'arrow-down', color: '#ef4444' },
+    { key: 'library_visits', label: t('overview.libraryRenewals'), value: formatNumber(s.reh_count || 0), change: '-', changeType: 'neutral', icon: 'refresh', color: '#059669' },
+    { key: 'online_renewals', label: t('overview.onlineRenewals'), value: formatNumber(s.rei_count || 0), change: '-', changeType: 'neutral', icon: 'wifi', color: '#d97706' }
   ]
 })
 
-const categoryColors = ['#818cf8', '#6366f1', '#a78bfa', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#ef4444']
+const categoryColors = ['#fbbf24', '#d97706', '#a78bfa', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#059669', '#ef4444']
 
 const categoryData = computed(() => {
   const cats = props.allData?.books?.categories
   if (!cats || !cats.length) {
     return [
-      { name: t('overview.literature'), value: 0, percent: 0, color: '#818cf8' },
-      { name: t('overview.socialScience'), value: 0, percent: 0, color: '#6366f1' },
+      { name: t('overview.literature'), value: 0, percent: 0, color: '#fbbf24' },
+      { name: t('overview.socialScience'), value: 0, percent: 0, color: '#d97706' },
       { name: t('overview.engineering'), value: 0, percent: 0, color: '#a78bfa' },
       { name: t('overview.naturalScience'), value: 0, percent: 0, color: '#06b6d4' },
       { name: t('overview.humanities'), value: 0, percent: 0, color: '#10b981' },
@@ -116,12 +127,7 @@ const categoryData = computed(() => {
 const borrowTypeData = computed(() => {
   const actions = props.allData?.borrows?.actionStats
   if (!actions || !actions.length) {
-    return [
-      { name: t('overview.checkout'), percent: 38.1, color: '#6366f1' },
-      { name: t('overview.return'), percent: 26.8, color: '#818cf8' },
-      { name: t('overview.libraryRenewal'), percent: 13.3, color: '#06b6d4' },
-      { name: t('overview.onlineRenewal'), percent: 7.4, color: '#10b981' }
-    ]
+    return []
   }
   return actions.map((a, i) => ({
     name: a.name || a.action,
@@ -155,25 +161,16 @@ const trendData = computed(() => {
   }
   return trend.map(t => ({
     month: t.month,
-    value: Math.round((t.count || 0) / 1000)
+    value: t.activeCount || t.count || 0
   }))
 })
 
 const readerActivityData = computed(() => {
   const types = props.allData?.readers?.readerTypes
   if (!types || !types.length) {
-    return [
-      { name: t('degree.bachelor'), value: 35.1, color: '#06b6d4' },
-      { name: t('degree.graduate'), value: 16.6, color: '#8b5cf6' },
-      { name: t('degree.college'), value: 15.2, color: '#10b981' },
-      { name: t('degree.highSchool'), value: 13.0, color: '#f59e0b' },
-      { name: t('degree.temporary'), value: 9.4, color: '#ef4444' },
-      { name: t('degree.primary'), value: 5.9, color: '#6366f1' },
-      { name: t('degree.preschool'), value: 2.6, color: '#3b82f6' },
-      { name: t('degree.middleSchool'), value: 2.3, color: '#818cf8' }
-    ]
+    return []
   }
-  const activityColors = ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#3b82f6', '#818cf8']
+  const activityColors = ['#06b6d4', '#059669', '#10b981', '#f59e0b', '#ef4444', '#d97706', '#3b82f6', '#fbbf24']
   return types.map((t, i) => ({
     name: t.name,
     value: t.percent || 0,
@@ -185,8 +182,8 @@ const todayStats = computed(() => {
   const s = props.allData?.overview?.stats
   return {
     visitors: formatNumber(s?.today_visits || 0) + ' ' + t('common.people'),
-    borrows: formatNumber(s?.cko_count || 0) + ' ' + t('common.volume'),
-    returns: formatNumber(s?.cki_count || 0) + ' ' + t('common.unit')
+    borrows: formatNumber(s?.today_borrows || 0) + ' ' + t('common.volume'),
+    returns: formatNumber(s?.today_returns || 0) + ' ' + t('common.unit')
   }
 })
 
@@ -319,11 +316,17 @@ const getReaderActivityEndAngle = (index) => {
 }
 
 const maxTrendValue = computed(() => {
-  const vals = trendData.value.map(d => d.value)
+  const data = trendData.value
+  if (!data || !data.length) return 1
+  const vals = data.map(d => d.value)
   const max = Math.max(...vals)
   return max === 0 ? 1 : max
 })
-const minTrendValue = computed(() => Math.min(...trendData.value.map(d => d.value)))
+const minTrendValue = computed(() => {
+  const data = trendData.value
+  if (!data || !data.length) return 0
+  return Math.min(...data.map(d => d.value))
+})
 
 const trendPaths = computed(() => {
   const data = trendData.value
@@ -351,7 +354,7 @@ const trendPaths = computed(() => {
 })
 
 const getSliceOpacity = (dataArr, idx, highlightRef) => {
-  if (!highlightRef.value) return 1
+  if (!highlightRef || !highlightRef.value) return 1
   return highlightRef.value === dataArr[idx].name ? 1 : 0.35
 }
 
@@ -542,7 +545,7 @@ onUnmounted(() => {
           <button
             v-for="opt in filterOptions"
             :key="opt.key"
-            class="filter-btn"
+            class="btn-filter"
             :class="{ active: dataFilter === opt.key }"
             @click="dataFilter = opt.key"
           >{{ opt.label }}</button>
@@ -550,7 +553,7 @@ onUnmounted(() => {
       </div>
       <div class="toolbar-right">
         <div class="toolbar-year" :class="{ open: showYearDropdown }">
-          <button class="year-btn" @click="showYearDropdown = !showYearDropdown">
+          <button class="btn-select" @click="showYearDropdown = !showYearDropdown">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <span>{{ selectedYear }}{{ t('common.year') }}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" class="dropdown-arrow"><polyline points="6 9 12 15 18 9"/></svg>
@@ -567,11 +570,11 @@ onUnmounted(() => {
             </div>
           </transition>
         </div>
-        <button class="toolbar-btn" :class="{ spinning: isRefreshing }" @click="handleRefresh" :title="t('common.refresh')">
+        <button class="toolbar-btn btn-icon btn-secondary" :class="{ spinning: isRefreshing }" @click="handleRefresh" :title="t('common.refresh')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <div class="toolbar-export" :class="{ open: showExportMenu }">
-          <button class="toolbar-btn" @click="showExportMenu = !showExportMenu" :title="t('overview.exportData')">
+          <button class="toolbar-btn btn-icon btn-secondary" @click="showExportMenu = !showExportMenu" :title="t('overview.exportData')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
           <transition name="dropdown">
@@ -664,23 +667,8 @@ onUnmounted(() => {
           <h3 class="chart-title">{{ t('overview.trendAnalysis') }}</h3>
           <div class="trend-tabs">
             <button
-              v-for="tab in [
-                { key: 'daily', label: t('overview.dailyTrend') },
-                { key: 'weekly', label: t('overview.weeklyTrend') },
-                { key: 'monthly', label: t('overview.monthlyTrend') },
-                { key: 'yearly', label: t('overview.yearlyTrend') }
-              ]"
-              :key="tab.key"
-              class="trend-tab"
-              :class="{ active: activeTrendTab === tab.key }"
-              @click="activeTrendTab = tab.key"
-            >{{ tab.label }}</button>
-          </div>
-          <div class="year-selector">
-            <span>2026{{ t('common.year') }}</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
+              class="trend-tab active"
+            >{{ t('overview.monthlyTrend') }}</button>
           </div>
         </div>
         <div v-if="chartLoadingStates.trend" class="chart-loading-state">
@@ -691,7 +679,7 @@ onUnmounted(() => {
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
           <span>{{ t('common.loadFailed') }}</span>
-          <button class="retry-btn" @click="retryChart('trend')">{{ t('common.retry') }}</button>
+          <button class="retry-btn btn btn-secondary btn-sm" @click="retryChart('trend')">{{ t('common.retry') }}</button>
         </div>
         <div v-else-if="isTrendEmpty" class="chart-empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -702,8 +690,8 @@ onUnmounted(() => {
           <svg viewBox="0 0 800 280" class="trend-svg" preserveAspectRatio="xMidYMid meet">
             <defs>
               <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#818cf8;stop-opacity:0.3" />
-                <stop offset="100%" style="stop-color:#818cf8;stop-opacity:0.02" />
+                <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:0.3" />
+                <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:0.02" />
               </linearGradient>
               <filter id="glow">
                 <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -714,14 +702,14 @@ onUnmounted(() => {
               </filter>
             </defs>
             <path :d="trendPaths.areaPath" fill="url(#areaGradient)" class="trend-area"/>
-            <path :d="trendPaths.linePath" fill="none" stroke="#6366f1" stroke-width="3" filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round" class="trend-line"/>
+            <path :d="trendPaths.linePath" fill="none" stroke="#d97706" stroke-width="3" filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round" class="trend-line"/>
             <g v-for="(point, idx) in trendPaths.points" :key="idx">
               <circle
                 :cx="point.x"
                 :cy="point.y"
                 :r="hoveredTrendPoint === idx ? 7 : 5"
-                :fill="hoveredTrendPoint === idx ? '#6366f1' : 'white'"
-                :stroke="'#6366f1'"
+                :fill="hoveredTrendPoint === idx ? '#d97706' : 'white'"
+                :stroke="'#d97706'"
                 :stroke-width="hoveredTrendPoint === idx ? 3 : 2"
                 class="data-point"
                 @mouseenter="onTrendPointHover(idx)"
@@ -734,11 +722,11 @@ onUnmounted(() => {
                 text-anchor="middle"
                 :font-size="hoveredTrendPoint === idx ? 13 : 10"
                 :font-weight="hoveredTrendPoint === idx ? 700 : 400"
-                :fill="hoveredTrendPoint === idx ? '#6366f1' : '#94a3b8'"
-              >{{ trendData[idx]?.value || 0 }}{{ t('common.thousand') }}</text>
+                :fill="hoveredTrendPoint === idx ? '#d97706' : '#94a3b8'"
+              >{{ formatNumber(trendData[idx]?.value || 0) }}</text>
             </g>
             <g v-for="(item, idx) in trendData" :key="'label-' + idx">
-              <text :x="40 + (idx / (trendData.length - 1)) * 720" y="270" text-anchor="middle" font-size="11" fill="#94a3b8">{{ item.month }}</text>
+              <text :x="40 + (idx / (trendData.length - 1)) * 720" y="275" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500" :transform="'rotate(-30,' + (40 + (idx / (trendData.length - 1)) * 720) + ',275)'">{{ item.month }}</text>
             </g>
           </svg>
         </div>
@@ -755,7 +743,7 @@ onUnmounted(() => {
               <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
             <span>{{ t('common.loadFailed') }}</span>
-            <button class="retry-btn" @click="retryChart('activity')">{{ t('common.retry') }}</button>
+            <button class="retry-btn btn btn-secondary btn-sm" @click="retryChart('activity')">{{ t('common.retry') }}</button>
           </div>
           <div v-else-if="isReaderActivityEmpty" class="chart-empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -763,7 +751,7 @@ onUnmounted(() => {
             <span class="empty-desc">{{ t('overview.noReaderDataDesc') }}</span>
           </div>
           <div v-else class="chart-content activity-content">
-            <svg viewBox="0 0 200 200" class="activity-donut-svg">
+            <svg v-if="readerActivityData.length" viewBox="0 0 200 200" class="activity-donut-svg">
               <g transform="translate(100, 100)">
                 <path
                   v-for="(item, idx) in readerActivityData"
@@ -780,6 +768,11 @@ onUnmounted(() => {
                 <text x="0" y="14" text-anchor="middle" font-size="10" fill="#64748b">{{ t('overview.totalReaders') }}</text>
               </g>
             </svg>
+            <div v-else class="chart-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span class="empty-title">{{ t('overview.noReaderData') }}</span>
+              <span class="empty-desc">{{ t('overview.noReaderDataDesc') }}</span>
+            </div>
             <div class="activity-legend">
               <div
                 v-for="(item, idx) in readerActivityData"
@@ -803,18 +796,6 @@ onUnmounted(() => {
           </div>
           <template v-else>
             <h3 class="today-title">{{ t('overview.todaySummary') }}</h3>
-            <div class="today-mini-chart">
-              <svg viewBox="0 0 200 80" class="mini-line-chart" preserveAspectRatio="xMidYMid meet">
-                <polyline
-                  points="0,60 20,45 40,55 60,30 80,40 100,25 120,35 140,20 160,30 180,15 200,25"
-                  fill="none"
-                  stroke="#818cf8"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
             <div class="today-stats-list">
               <div class="today-stat-item">
                 <span class="today-label">{{ t('overview.todayVisits') }}</span>
@@ -851,7 +832,7 @@ onUnmounted(() => {
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
           <span>{{ t('common.loadFailed') }}</span>
-          <button class="retry-btn" @click="retryChart('pie')">{{ t('common.retry') }}</button>
+          <button class="retry-btn btn btn-secondary btn-sm" @click="retryChart('pie')">{{ t('common.retry') }}</button>
         </div>
         <div v-else-if="isCategoryEmpty" class="chart-empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -864,7 +845,7 @@ onUnmounted(() => {
               <path
                 v-for="(item, idx) in categoryData"
                 :key="idx"
-                :d="describeArc(0, 0, 95, getCategoryStartAngle(idx), getCategoryEndAngle(idx))"
+                :d="describeArc(0, 0, 95, getCategoryStartAngle(idx), idx === categoryData.length - 1 ? 360 : getCategoryEndAngle(idx))"
                 :fill="item.color"
                 stroke="#fff"
                 stroke-width="2"
@@ -909,7 +890,7 @@ onUnmounted(() => {
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
           <span>{{ t('common.loadFailed') }}</span>
-          <button class="retry-btn" @click="retryChart('donut')">{{ t('common.retry') }}</button>
+          <button class="retry-btn btn btn-secondary btn-sm" @click="retryChart('donut')">{{ t('common.retry') }}</button>
         </div>
         <div v-else-if="isBorrowTypeEmpty" class="chart-empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -917,7 +898,7 @@ onUnmounted(() => {
           <span class="empty-desc">{{ t('overview.noBorrowTypeDataDesc') }}</span>
         </div>
         <div v-else class="chart-content donut-content">
-          <svg viewBox="0 0 220 220" class="donut-svg" preserveAspectRatio="xMidYMid meet">
+          <svg v-if="borrowTypeData.length" viewBox="0 0 220 220" class="donut-svg" preserveAspectRatio="xMidYMid meet">
             <g transform="translate(110, 110)">
               <path
                 v-for="(item, idx) in borrowTypeData"
@@ -930,10 +911,15 @@ onUnmounted(() => {
                 @mouseenter="onBorrowTypeHover(item.name)"
                 @mouseleave="onBorrowTypeLeave"
               />
-              <text x="0" y="-5" text-anchor="middle" font-size="28" font-weight="700" fill="#1e293b">{{ borrowTypeData[0]?.percent || 0 }}%</text>
-              <text x="0" y="16" text-anchor="middle" font-size="12" fill="#64748b">{{ borrowTypeData[0]?.name || t('overview.largestShare') }}</text>
+              <text x="0" y="-5" text-anchor="middle" font-size="28" font-weight="700" fill="#1e293b">100%</text>
+              <text x="0" y="16" text-anchor="middle" font-size="12" fill="#64748b">{{ t('overview.total') }}</text>
             </g>
           </svg>
+          <div v-else class="chart-empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <span class="empty-title">{{ t('overview.noBorrowTypeData') }}</span>
+            <span class="empty-desc">{{ t('overview.noBorrowTypeDataDesc') }}</span>
+          </div>
           <div class="donut-legend">
             <div
               v-for="(item, idx) in borrowTypeData"
@@ -967,7 +953,7 @@ onUnmounted(() => {
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
           </svg>
           <span>{{ t('common.loadFailed') }}</span>
-          <button class="retry-btn" @click="retryChart('bar')">{{ t('common.retry') }}</button>
+          <button class="retry-btn btn btn-secondary btn-sm" @click="retryChart('bar')">{{ t('common.retry') }}</button>
         </div>
         <div v-else-if="isTopCategoryEmpty" class="chart-empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>

@@ -43,5 +43,19 @@ export default {
   goBorrow: '去借书',
   borrowSuccess: '借阅成功！',
   borrowFailed: '借阅失败',
-  networkError: '网络错误，请重试'
+  networkError: '网络错误，请重试',
+  returnBook: '归还',
+  renewBook: '续借',
+  returnSuccess: '归还成功！',
+  returnFailed: '归还失败',
+  renewSuccess: '续借成功！',
+  renewFailed: '续借失败',
+  dataLoadFailed: '部分数据加载失败',
+  retry: '重试',
+  someDataFailed: '部分数据加载失败，可以正常使用已有数据',
+  libraryStats: '图书馆统计',
+  myStats: '我的统计',
+  statMyBorrows: '我的借阅',
+  statMyReturns: '我的归还',
+  statMyCurrentBorrowed: '当前在借'
 }

@@ -7,7 +7,7 @@ import { getCache, setCache } from '@/utils/cache'
 const props = defineProps({
   cardKey: { type: String, required: true },
   cardLabel: { type: String, required: true },
-  accent: { type: String, default: '#6366f1' },
+  accent: { type: String, default: '#d97706' },
   data: { type: Object, default: () => ({}) }
 })
 
@@ -228,7 +228,7 @@ onMounted(() => {
         </div>
       </div>
       <div class="header-actions">
-        <button class="action-btn" @click="handleExportCSV" title="导出CSV">
+        <button class="action-btn btn btn-secondary btn-sm" @click="handleExportCSV" title="导出CSV">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -236,7 +236,7 @@ onMounted(() => {
           </svg>
           <span>CSV</span>
         </button>
-        <button class="action-btn" @click="handleExportPDF" title="导出PDF">
+        <button class="action-btn btn btn-secondary btn-sm" @click="handleExportPDF" title="导出PDF">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -246,7 +246,7 @@ onMounted(() => {
           </svg>
           <span>PDF</span>
         </button>
-        <button class="close-btn" @click="$emit('close')" title="关闭">
+        <button class="close-btn btn-icon btn-ghost" @click="$emit('close')" title="关闭">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -259,7 +259,7 @@ onMounted(() => {
       <button
         v-for="tab in tabOptions"
         :key="tab.id"
-        class="tab-btn"
+        class="tab-btn btn-tab"
         :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
       >
@@ -302,7 +302,7 @@ onMounted(() => {
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
         <span>{{ error }}</span>
-        <button class="retry-btn" @click="loadData">重试</button>
+        <button class="retry-btn btn btn-primary btn-sm" @click="loadData">重试</button>
       </div>
 
       <template v-else>
@@ -434,7 +434,7 @@ onMounted(() => {
 </template>
 
 <script>
-const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#64748b']
+const COLORS = ['#d97706', '#059669', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#64748b']
 
 export default {
   methods: {
@@ -547,49 +547,9 @@ export default {
   gap: var(--space-2);
 }
 
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--color-neutral-600);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.action-btn:hover {
-  background: var(--color-neutral-50);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .action-btn svg {
   width: 14px;
   height: 14px;
-}
-
-.close-btn {
-  width: 32px;
-  height: 32px;
-  background: var(--color-neutral-100);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-500);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-base);
-}
-
-.close-btn:hover {
-  background: var(--color-danger-50);
-  color: var(--color-danger-500);
 }
 
 .close-btn svg {
@@ -602,23 +562,6 @@ export default {
   gap: var(--space-1);
   padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--color-neutral-100);
-}
-
-.tab-btn {
-  padding: var(--space-2) var(--space-4);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-neutral-500);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.tab-btn:hover {
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-700);
 }
 
 .tab-btn.active {
@@ -706,18 +649,6 @@ export default {
 
 .retry-btn {
   margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.retry-btn:hover {
-  opacity: 0.9;
 }
 
 .section-title {

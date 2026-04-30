@@ -211,14 +211,14 @@ onMounted(() => {
             </div>
           </div>
           <div class="search-actions">
-            <button class="search-btn" @click="performSearch(1)" :disabled="searchLoading">
+            <button class="btn btn-primary search-btn" @click="performSearch(1)" :disabled="searchLoading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <span>{{ searchLoading ? t('common.searching') : t('common.search') }}</span>
             </button>
-            <button class="reset-btn" @click="resetSearch">{{ t('book.resetBtn') }}</button>
+            <button class="btn btn-secondary reset-btn" @click="resetSearch">{{ t('book.resetBtn') }}</button>
           </div>
         </div>
 
@@ -259,7 +259,7 @@ onMounted(() => {
 
           <div v-if="searchTotalPages > 1" class="pagination">
             <button
-              class="page-btn"
+              class="btn btn-secondary btn-sm page-btn"
               :disabled="searchPage === 1"
               @click="goToPage(searchPage - 1)"
             >
@@ -267,7 +267,7 @@ onMounted(() => {
             </button>
             <span class="page-info">{{ t('common.page') }} {{ searchPage }} / {{ searchTotalPages }} {{ t('common.pageOf') }}</span>
             <button
-              class="page-btn"
+              class="btn btn-secondary btn-sm page-btn"
               :disabled="searchPage === searchTotalPages"
               @click="goToPage(searchPage + 1)"
             >
@@ -571,63 +571,13 @@ onMounted(() => {
   gap: var(--space-3);
 }
 
-.search-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-6);
-  background: var(--gradient-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-0);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  box-shadow: var(--shadow-primary);
-}
-
-.search-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-primary-lg);
-}
-
-.search-btn:active {
-  transform: translateY(0);
-}
-
 .search-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
   box-shadow: none;
 }
 
 .search-btn svg {
   width: 16px;
   height: 16px;
-}
-
-.reset-btn {
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-600);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.reset-btn:hover {
-  background: var(--color-neutral-50);
-  border-color: var(--color-neutral-300);
-  color: var(--color-neutral-800);
-}
-
-.reset-btn:active {
-  transform: scale(0.97);
 }
 
 .search-results {
@@ -682,33 +632,6 @@ onMounted(() => {
   border-top: 1px solid var(--color-neutral-200);
 }
 
-.page-btn {
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-sm);
-  color: var(--color-neutral-600);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.page-btn:hover:not(:disabled) {
-  background: var(--color-neutral-50);
-  border-color: var(--color-neutral-300);
-  color: var(--color-neutral-800);
-}
-
-.page-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .page-info {
   font-size: var(--text-sm);
   color: var(--color-neutral-500);
@@ -754,7 +677,6 @@ onMounted(() => {
   .search-btn,
   .reset-btn {
     width: 100%;
-    justify-content: center;
   }
 
   .pagination {

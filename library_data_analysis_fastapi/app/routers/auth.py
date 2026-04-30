@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Form, HTTPException, Depends, Request
-from datetime import datetime
+from datetime import datetime, timezone
 import jwt
 
 from app.database import get_db
@@ -41,7 +41,7 @@ async def register(username: str = Form(...), password: str = Form(...), conn=De
 
             cur.execute(
                 "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (%s, %s, %s, %s, %s)",
-                (new_id, username, password_hash, 'user', datetime.utcnow())
+                (new_id, username, password_hash, 'user', datetime.now(timezone.utc))
             )
             conn.commit()
 
@@ -98,7 +98,11 @@ async def login(
 
 
 @router.get("/me")
-async def get_current_user_info(token: str):
+async def get_current_user_info(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未提供认证信息")
+    token = auth_header.split(" ")[1]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")

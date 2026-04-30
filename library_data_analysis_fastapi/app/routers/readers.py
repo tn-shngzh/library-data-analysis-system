@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends
 from datetime import datetime
 from app.database import get_db
@@ -59,55 +60,79 @@ async def get_reader_types(conn=Depends(get_db)):
 
 
 @router.get("/monthly-trend")
-async def get_monthly_trend(conn=Depends(get_db)):
-    month_label_map = {
-        1: '1 月', 2: '2 月', 3: '3 月', 4: '4 月',
-        5: '5 月', 6: '6 月', 7: '7 月', 8: '8 月',
-        9: '9 月', 10: '10 月', 11: '11 月', 12: '12 月'
-    }
-
+async def get_monthly_trend(year: Optional[int] = None, conn=Depends(get_db)):
     def format_month(m):
-        month_num = m % 100
-        return month_label_map.get(month_num, str(m))
+        return f"{m // 100}年{m % 100}月"
 
     with conn.cursor() as cur:
         try:
-            cur.execute("""
-                SELECT 
-                    ma.month,
-                    ma.active_count,
-                    COALESCE(bc.borrow_count, 0) as borrow_count
-                FROM mv_monthly_active ma
-                LEFT JOIN (
+            if year is not None:
+                cur.execute("""
                     SELECT 
-                        (action_date / 100) as month,
-                        COUNT(*) as borrow_count
-                    FROM circulations
-                    WHERE action = 'CKO'
-                    GROUP BY (action_date / 100)
-                ) bc ON ma.month = bc.month
-                ORDER BY ma.month
-            """)
+                        ma.month,
+                        ma.active_count,
+                        COALESCE(bc.borrow_count, 0) as borrow_count
+                    FROM mv_monthly_active ma
+                    LEFT JOIN (
+                        SELECT 
+                            (action_date / 100) as month,
+                            COUNT(*) as borrow_count
+                        FROM circulations
+                        WHERE action = 'CKO'
+                        GROUP BY (action_date / 100)
+                    ) bc ON ma.month = bc.month
+                    WHERE (ma.month / 100) = %s
+                    ORDER BY ma.month
+                """, (year,))
+            else:
+                cur.execute("""
+                    SELECT 
+                        ma.month,
+                        ma.active_count,
+                        COALESCE(bc.borrow_count, 0) as borrow_count
+                    FROM mv_monthly_active ma
+                    LEFT JOIN (
+                        SELECT 
+                            (action_date / 100) as month,
+                            COUNT(*) as borrow_count
+                        FROM circulations
+                        WHERE action = 'CKO'
+                        GROUP BY (action_date / 100)
+                    ) bc ON ma.month = bc.month
+                    ORDER BY ma.month
+                """)
             rows = cur.fetchall()
             return [
                 {"month": format_month(r[0]), "activeCount": r[1], "borrowCount": r[2]}
                 for r in rows
             ]
         except Exception:
-            cur.execute("""
-                SELECT DISTINCT (action_date / 100) as month
-                FROM circulations
-                ORDER BY month
-            """)
-            months = [r[0] for r in cur.fetchall()]
-            result = []
-            for m in months:
-                cur.execute("SELECT COUNT(DISTINCT borrower_id) FROM circulations WHERE action_date BETWEEN %s AND %s + 99", (m, m))
-                active_count = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM circulations WHERE action_date BETWEEN %s AND %s + 99 AND action = 'CKO'", (m, m))
-                borrow_count = cur.fetchone()[0]
-                result.append({"month": format_month(m), "activeCount": active_count, "borrowCount": borrow_count})
-            return result
+            if year is not None:
+                cur.execute("""
+                    SELECT 
+                        (action_date / 100) as month,
+                        COUNT(DISTINCT borrower_id) as active_count,
+                        COUNT(*) FILTER (WHERE action = 'CKO') as borrow_count
+                    FROM circulations
+                    WHERE (action_date / 10000) = %s
+                    GROUP BY (action_date / 100)
+                    ORDER BY month
+                """, (year,))
+            else:
+                cur.execute("""
+                    SELECT 
+                        (action_date / 100) as month,
+                        COUNT(DISTINCT borrower_id) as active_count,
+                        COUNT(*) FILTER (WHERE action = 'CKO') as borrow_count
+                    FROM circulations
+                    GROUP BY (action_date / 100)
+                    ORDER BY month
+                """)
+            rows = cur.fetchall()
+            return [
+                {"month": format_month(r[0]), "activeCount": r[1], "borrowCount": r[2]}
+                for r in rows
+            ]
 
 
 @router.get("/top")

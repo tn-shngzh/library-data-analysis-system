@@ -6,7 +6,7 @@ import io
 import logging
 import bcrypt
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import HTTPException, Request
 
@@ -60,7 +60,7 @@ def validate_password(password: str) -> tuple:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -114,8 +114,24 @@ def generate_captcha_image(text: str) -> str:
         draw.point((x, y), fill=(random.randint(150, 200), random.randint(150, 200), random.randint(150, 200)))
 
     try:
-        font = ImageFont.truetype("arial.ttf", 24)
-    except:
+        font_paths = [
+            "arial.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/msyh.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+        font = None
+        for fp in font_paths:
+            try:
+                font = ImageFont.truetype(fp, 24)
+                break
+            except OSError:
+                continue
+        if font is None:
+            font = ImageFont.load_default(size=20)
+    except Exception:
         font = ImageFont.load_default()
 
     char_width = width // len(text)
@@ -138,10 +154,10 @@ def create_captcha():
 
     captcha_store[captcha_key] = {
         "code": captcha_code,
-        "expire_time": datetime.utcnow() + timedelta(minutes=5)
+        "expire_time": datetime.now(timezone.utc) + timedelta(minutes=5)
     }
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired_keys = [k for k, v in captcha_store.items() if v["expire_time"] < now]
     for k in expired_keys:
         del captcha_store[k]
@@ -157,7 +173,7 @@ def verify_captcha(captcha_key: str, captcha: str):
     if not captcha_data:
         raise HTTPException(status_code=400, detail="验证码已过期，请刷新")
 
-    if captcha_data["expire_time"] < datetime.utcnow():
+    if captcha_data["expire_time"] < datetime.now(timezone.utc):
         del captcha_store[captcha_key]
         raise HTTPException(status_code=400, detail="验证码已过期，请刷新")
 

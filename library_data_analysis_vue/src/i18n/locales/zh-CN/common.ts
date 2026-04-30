@@ -35,7 +35,7 @@ export default {
   next: '下一页',
   page: '第',
   pageOf: '页',
-  total: '共',
+  total: '合计',
   found: '条结果',
   confirm: '确认',
   noData: '暂无数据'

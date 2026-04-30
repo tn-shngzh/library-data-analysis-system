@@ -35,8 +35,8 @@ export default {
   next: 'Next',
   page: '',
   pageOf: '',
-  total: 'Total',
   found: 'results',
   confirm: 'Confirm',
-  noData: 'No Data'
+  noData: 'No Data',
+  total: 'Total'
 }

@@ -16,5 +16,8 @@ export default {
   month: '月份',
   activeCount: '活躍人數',
   change: '環比變化',
-  percent: '佔比'
+  percent: '佔比',
+  rawData: '原始數據',
+  movingAvg: '移動平均線',
+  trendLine: '趨勢線'
 }

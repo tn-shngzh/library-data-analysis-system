@@ -214,13 +214,13 @@ onMounted(() => {
         <div class="config-section">
           <h3>{{ t('report.statisticsPeriod') }}</h3>
           <div class="period-options">
-            <button class="period-btn" :class="{ active: reportPeriod === 'month' }" @click="reportPeriod = 'month'">{{ t('report.monthly') }}</button>
-            <button class="period-btn" :class="{ active: reportPeriod === 'quarter' }" @click="reportPeriod = 'quarter'">{{ t('report.quarterly') }}</button>
-            <button class="period-btn" :class="{ active: reportPeriod === 'year' }" @click="reportPeriod = 'year'">{{ t('report.yearly') }}</button>
+            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'month' }" @click="reportPeriod = 'month'">{{ t('report.monthly') }}</button>
+            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'quarter' }" @click="reportPeriod = 'quarter'">{{ t('report.quarterly') }}</button>
+            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'year' }" @click="reportPeriod = 'year'">{{ t('report.yearly') }}</button>
           </div>
         </div>
 
-        <button class="generate-btn" @click="generateReport" :disabled="generating">
+        <button class="generate-btn btn btn-primary btn-lg btn-block" @click="generateReport" :disabled="generating">
           <svg v-if="!generating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -243,7 +243,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="export-actions">
-            <button class="export-btn" @click="exportReport('csv')">
+            <button class="export-btn btn btn-ghost" @click="exportReport('csv')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -251,7 +251,7 @@ onMounted(() => {
               </svg>
               <span>{{ t('report.exportCSV') }}</span>
             </button>
-            <button class="export-btn" @click="exportReport('txt')">
+            <button class="export-btn btn btn-ghost" @click="exportReport('txt')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -328,7 +328,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border-top-color: #d97706;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 12px;
@@ -377,14 +377,14 @@ onMounted(() => {
 }
 
 .report-type-card:hover {
-  border-color: #a5b4fc;
-  background: #eef2ff;
+  border-color: #fcd34d;
+  background: #fffbeb;
 }
 
 .report-type-card.active {
-  border-color: #6366f1;
-  background: #eef2ff;
-  box-shadow: 0 0 0 1px #6366f1;
+  border-color: #d97706;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px #d97706;
 }
 
 .rt-icon {
@@ -394,7 +394,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #d97706, #fbbf24);
   color: white;
   flex-shrink: 0;
 }
@@ -428,7 +428,7 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #6366f1;
+  background: #d97706;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -445,54 +445,10 @@ onMounted(() => {
   gap: 8px;
 }
 
-.period-btn {
-  padding: 10px 24px;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.period-btn:hover {
-  border-color: #a5b4fc;
-}
-
 .period-btn.active {
-  border-color: #6366f1;
-  background: #6366f1;
-  color: white;
-}
-
-.generate-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  border: none;
-  border-radius: 10px;
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.generate-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
-}
-
-.generate-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  background: var(--color-primary-500);
+  color: var(--color-neutral-0);
+  border-color: var(--color-primary-500);
 }
 
 .generate-btn svg {
@@ -510,9 +466,9 @@ onMounted(() => {
 }
 
 .report-preview {
-  background: white;
+  background: var(--color-neutral-0);
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-neutral-200);
   overflow: hidden;
 }
 
@@ -521,8 +477,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   padding: 24px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  color: white;
+  background: var(--gradient-primary);
+  color: var(--color-neutral-0);
 }
 
 .preview-header h2 {
@@ -544,19 +500,10 @@ onMounted(() => {
 }
 
 .export-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--color-neutral-0);
 }
 
 .export-btn:hover {
@@ -614,7 +561,7 @@ onMounted(() => {
 .item-value {
   font-size: 15px;
   font-weight: 700;
-  color: #6366f1;
+  color: #d97706;
 }
 
 .empty-report {

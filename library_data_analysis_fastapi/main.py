@@ -25,23 +25,30 @@ logger = logging.getLogger(__name__)
 async def refresh_materialized_views():
     while True:
         await asyncio.sleep(300)
-        conn = get_db_connection()
         try:
-            with conn.cursor() as cur:
-                views = [
-                    'mv_overview_stats', 'mv_book_stats', 'mv_borrow_stats',
-                    'mv_action_stats', 'mv_degree_borrow_stats', 'mv_daily_borrow_trend',
-                    'mv_top_borrowers', 'mv_top_books', 'mv_reader_stats', 'mv_monthly_active'
-                ]
-                for view in views:
-                    try:
-                        cur.execute(f"REFRESH MATERIALIZED VIEW {view}")
-                    except Exception as e:
-                        logger.warning(f"Failed to refresh {view}: {e}")
-                conn.commit()
-                logger.info("Materialized views refreshed successfully")
-        finally:
-            release_db_connection(conn)
+            await asyncio.to_thread(_refresh_views_sync)
+            logger.info("Materialized views refreshed successfully")
+        except Exception as e:
+            logger.warning(f"Failed to refresh materialized views: {e}")
+
+
+def _refresh_views_sync():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            views = [
+                'mv_overview_stats', 'mv_book_stats', 'mv_borrow_stats',
+                'mv_action_stats', 'mv_degree_borrow_stats', 'mv_daily_borrow_trend',
+                'mv_top_borrowers', 'mv_top_books', 'mv_reader_stats', 'mv_monthly_active'
+            ]
+            for view in views:
+                try:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW {view}")
+                except Exception as e:
+                    logger.warning(f"Failed to refresh {view}: {e}")
+            conn.commit()
+    finally:
+        release_db_connection(conn)
 
 
 @asynccontextmanager
@@ -90,11 +97,13 @@ async def root():
 async def health_check():
     checks = {}
     try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        release_db_connection(conn)
-        checks["database"] = "ok"
+        def _check_db():
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            release_db_connection(conn)
+            return "ok"
+        checks["database"] = await asyncio.to_thread(_check_db)
     except Exception as e:
         checks["database"] = f"error: {str(e)}"
 

@@ -41,5 +41,7 @@ export default {
   captchaConnectFail: 'Cannot connect to captcha service',
   captchaRequired: 'Please enter captcha',
   loginFailed: 'Login failed',
-  networkError: 'Network error, please retry'
+  networkError: 'Network error, please check connection and retry',
+  requestTimeout: 'Request timeout, please retry',
+  fillRequired: 'Please fill in all required fields'
 }

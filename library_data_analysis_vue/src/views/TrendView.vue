@@ -76,7 +76,7 @@ const padding = 50
 
 const monthlyChartPaths = computed(() => {
   const data = monthlyTrend.value
-  if (!data.length) return { linePath: '', areaPath: '', points: [] }
+  if (!data.length) return { linePath: '', areaPath: '', points: [], maPath: '', trendPath: '' }
 
   const chartW = chartWidth - padding * 2
   const chartH = chartHeight - padding * 2
@@ -95,7 +95,38 @@ const monthlyChartPaths = computed(() => {
     ` L ${points[points.length - 1].x} ${padding + chartH}` +
     ` L ${points[0].x} ${padding + chartH} Z`
 
-  return { linePath, areaPath, points }
+  const windowSize = 3
+  const maPoints = data.map((d, i) => {
+    if (i < windowSize - 1) return null
+    let sum = 0
+    for (let j = i - windowSize + 1; j <= i; j++) {
+      sum += (data[j].activeCount || data[j].count || 0)
+    }
+    const avg = sum / windowSize
+    return {
+      x: padding + (i / (data.length - 1 || 1)) * chartW,
+      y: padding + chartH - (avg / range) * chartH
+    }
+  }).filter(Boolean)
+  const maPath = maPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+
+  const n = data.length
+  const values = data.map(d => d.activeCount || d.count || 0)
+  const xMean = (n + 1) / 2
+  const yMean = values.reduce((s, v) => s + v, 0) / n
+  let num = 0, den = 0
+  for (let i = 0; i < n; i++) {
+    num += (i + 1 - xMean) * (values[i] - yMean)
+    den += (i + 1 - xMean) ** 2
+  }
+  const slope = den !== 0 ? num / den : 0
+  const intercept = yMean - slope * xMean
+  const clampY = (y) => Math.max(padding, Math.min(padding + chartH, y))
+  const trendStart = { x: points[0].x, y: clampY(padding + chartH - ((slope * 1 + intercept) / range) * chartH) }
+  const trendEnd = { x: points[n - 1].x, y: clampY(padding + chartH - ((slope * n + intercept) / range) * chartH) }
+  const trendPath = `M ${trendStart.x} ${trendStart.y} L ${trendEnd.x} ${trendEnd.y}`
+
+  return { linePath, areaPath, points, maPath, trendPath }
 })
 
 const dailyChartPaths = computed(() => {
@@ -131,7 +162,7 @@ const statCards = computed(() => {
   const max = data.length ? Math.max(...data.map(d => d.activeCount || d.count || 0)) : 0
   const maxMonth = data.find(d => (d.activeCount || d.count) === max)?.month || '-'
   return [
-    { i18nKey: 'trend.yearlyTotal', value: formatNumber(total), icon: 'total', color: '#6366f1' },
+    { i18nKey: 'trend.yearlyTotal', value: formatNumber(total), icon: 'total', color: '#d97706' },
     { i18nKey: 'trend.monthlyAvg', value: formatNumber(avg), icon: 'avg', color: '#3b82f6' },
     { i18nKey: 'trend.peakMonth', value: maxMonth, icon: 'peak', color: '#10b981' },
     { i18nKey: 'trend.peakValue', value: formatNumber(max), icon: 'max', color: '#f59e0b' }
@@ -146,7 +177,7 @@ const statCards = computed(() => {
         <h1>{{ t('trend.title') }}</h1>
         <p>{{ t('trend.desc') }}</p>
       </div>
-      <button class="refresh-btn" @click="fetchTrendData" :disabled="loading">
+      <button class="refresh-btn btn btn-secondary btn-sm" @click="fetchTrendData" :disabled="loading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 4v6h-6"/>
           <path d="M1 20v-6h6"/>
@@ -191,8 +222,8 @@ const statCards = computed(() => {
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn" :class="{ active: activeTab === 'monthly' }" @click="activeTab = 'monthly'">{{ t('trend.monthlyTab') }}</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">{{ t('trend.dailyTab') }}</button>
+        <button class="tab-btn btn-tab" :class="{ active: activeTab === 'monthly' }" @click="activeTab = 'monthly'">{{ t('trend.monthlyTab') }}</button>
+        <button class="tab-btn btn-tab" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">{{ t('trend.dailyTab') }}</button>
       </div>
 
       <div v-if="activeTab === 'monthly'" class="card">
@@ -204,8 +235,8 @@ const statCards = computed(() => {
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="trend-chart">
             <defs>
               <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
-                <stop offset="100%" stop-color="#6366f1" stop-opacity="0.02"/>
+                <stop offset="0%" stop-color="#d97706" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#d97706" stop-opacity="0.02"/>
               </linearGradient>
             </defs>
             <g class="grid-lines">
@@ -216,21 +247,39 @@ const statCards = computed(() => {
               />
             </g>
             <path :d="monthlyChartPaths.areaPath" fill="url(#areaGrad)" />
-            <path :d="monthlyChartPaths.linePath" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <path :d="monthlyChartPaths.linePath" fill="none" stroke="#d97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <path v-if="monthlyChartPaths.maPath" :d="monthlyChartPaths.maPath" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" stroke-linecap="round" stroke-linejoin="round" />
+            <path v-if="monthlyChartPaths.trendPath" :d="monthlyChartPaths.trendPath" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4 4" stroke-linecap="round" />
             <g v-for="(pt, idx) in monthlyChartPaths.points" :key="'pt-' + idx">
-              <circle :cx="pt.x" :cy="pt.y" r="5" fill="white" stroke="#6366f1" stroke-width="2"
+              <circle :cx="pt.x" :cy="pt.y" r="5" fill="white" stroke="#d97706" stroke-width="2"
                 class="chart-point" :class="{ hovered: hoveredPoint === idx }"
                 @mouseenter="hoveredPoint = idx" @mouseleave="hoveredPoint = null"
               />
               <g v-if="hoveredPoint === idx" class="tooltip">
-                <rect :x="pt.x - 40" :y="pt.y - 40" width="80" height="30" rx="6" fill="#1e293b" />
-                <text :x="pt.x" :y="pt.y - 22" text-anchor="middle" font-size="12" fill="white" font-weight="600">
-                  {{ formatNumber(pt.value) }}
-                </text>
+                <template v-if="pt.y - 40 >= 0">
+                  <rect :x="pt.x - 40" :y="pt.y - 40" width="80" height="30" rx="6" fill="#1e293b" />
+                  <text :x="pt.x" :y="pt.y - 22" text-anchor="middle" font-size="12" fill="white" font-weight="600">
+                    {{ formatNumber(pt.value) }}
+                  </text>
+                </template>
+                <template v-else>
+                  <rect :x="pt.x - 40" :y="pt.y + 10" width="80" height="30" rx="6" fill="#1e293b" />
+                  <text :x="pt.x" :y="pt.y + 28" text-anchor="middle" font-size="12" fill="white" font-weight="600">
+                    {{ formatNumber(pt.value) }}
+                  </text>
+                </template>
               </g>
-              <text :x="pt.x" :y="chartHeight - 10" text-anchor="middle" font-size="11" fill="#94a3b8">
+              <text :x="pt.x" :y="chartHeight - 5" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500" :transform="'rotate(-30,' + pt.x + ',' + (chartHeight - 5) + ')'">
                 {{ pt.label }}
               </text>
+            </g>
+            <g transform="translate(60, 15)" class="chart-legend">
+              <line x1="0" y1="0" x2="20" y2="0" stroke="#d97706" stroke-width="2.5" />
+              <text x="25" y="4" font-size="11" fill="#64748b">{{ t('trend.rawData') }}</text>
+              <line x1="100" y1="0" x2="120" y2="0" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" />
+              <text x="125" y="4" font-size="11" fill="#64748b">{{ t('trend.movingAvg') }}</text>
+              <line x1="220" y1="0" x2="240" y2="0" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4 4" />
+              <text x="245" y="4" font-size="11" fill="#64748b">{{ t('trend.trendLine') }}</text>
             </g>
           </svg>
         </div>
@@ -280,7 +329,7 @@ const statCards = computed(() => {
                 </text>
               </g>
               <text v-if="idx % Math.ceil(dailyTrend.length / 12) === 0"
-                :x="pt.x" :y="chartHeight - 10" text-anchor="middle" font-size="10" fill="#94a3b8">
+                :x="pt.x" :y="chartHeight - 5" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500" :transform="'rotate(-30,' + pt.x + ',' + (chartHeight - 5) + ')'">
                 {{ pt.label.slice(4) }}
               </text>
             </g>
@@ -293,11 +342,11 @@ const statCards = computed(() => {
             <path d="M13 17V5"/>
             <path d="M8 17v-3"/>
           </svg>
-          <p>{{ t('trend.loadingDaily') }}</p>
+          <p>{{ t('common.noData') }}</p>
         </div>
       </div>
 
-      <div class="card">
+      <div v-if="activeTab === 'monthly'" class="card">
         <div class="card-header">
           <h3>{{ t('trend.monthlyDetail') }}</h3>
         </div>
@@ -315,7 +364,7 @@ const statCards = computed(() => {
               <td class="name-cell">{{ item.month }}</td>
               <td class="count-cell">{{ formatNumber(item.activeCount || item.count) }}</td>
               <td>
-                <span v-if="idx > 0" class="change-tag" :class="(item.activeCount || item.count) >= (monthlyTrend[idx-1].activeCount || monthlyTrend[idx-1].count || 0) ? 'up' : 'down'">
+                <span v-if="idx > 0 && (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 0) > 0" class="change-tag" :class="(item.activeCount || item.count) >= (monthlyTrend[idx-1].activeCount || monthlyTrend[idx-1].count || 0) ? 'up' : 'down'">
                   {{ (item.activeCount || item.count) >= (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 0) ? '↑' : '↓' }}
                   {{ idx > 0 ? Math.abs((((item.activeCount || item.count || 0) - (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 0)) / (monthlyTrend[idx-1]?.activeCount || monthlyTrend[idx-1]?.count || 1) * 100)).toFixed(1) : 0 }}%
                 </span>
@@ -359,32 +408,8 @@ const statCards = computed(() => {
 
 .header-info p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--color-neutral-500);
   margin: 0;
-}
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.refresh-btn:hover {
-  border-color: #6366f1;
-  color: #6366f1;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .refresh-btn svg {
@@ -404,8 +429,8 @@ const statCards = computed(() => {
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 12px;
@@ -423,13 +448,13 @@ const statCards = computed(() => {
 }
 
 .stat-card {
-  background: white;
+  background: var(--color-neutral-0);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-neutral-200);
   transition: all 0.2s;
 }
 
@@ -445,7 +470,7 @@ const statCards = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--accent) 10%, white);
+  background: color-mix(in srgb, var(--accent) 10%, var(--color-neutral-0));
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -486,32 +511,13 @@ const statCards = computed(() => {
 
 .tab-btn {
   flex: 1;
-  padding: 10px 16px;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn.active {
-  background: white;
-  color: #6366f1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn:hover:not(.active) {
-  color: #334155;
 }
 
 .card {
-  background: white;
+  background: var(--color-neutral-0);
   border-radius: 12px;
   padding: 24px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-neutral-200);
   margin-bottom: 16px;
 }
 
@@ -553,7 +559,7 @@ const statCards = computed(() => {
 
 .chart-point.hovered {
   r: 7;
-  fill: #6366f1;
+  fill: var(--color-primary-500);
 }
 
 .empty-chart {
@@ -568,7 +574,7 @@ const statCards = computed(() => {
 .empty-chart p {
   font-size: 16px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-neutral-500);
   margin: 16px 0 4px;
 }
 
@@ -587,7 +593,7 @@ const statCards = computed(() => {
   font-size: 12px;
   font-weight: 600;
   color: #94a3b8;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--color-neutral-200);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -595,12 +601,12 @@ const statCards = computed(() => {
 .data-table td {
   padding: 12px 16px;
   font-size: 14px;
-  color: #475569;
+  color: var(--color-neutral-600);
   border-bottom: 1px solid #f1f5f9;
 }
 
 .data-table tbody tr:hover td {
-  background: #f8fafc;
+  background: var(--color-neutral-50);
 }
 
 .name-cell {
@@ -610,7 +616,7 @@ const statCards = computed(() => {
 
 .count-cell {
   font-weight: 600;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 
 .change-tag {
@@ -643,7 +649,7 @@ const statCards = computed(() => {
 
 .percent-fill {
   height: 6px;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, var(--color-primary-500), #fbbf24);
   border-radius: 3px;
   min-width: 4px;
   flex: 1;
@@ -654,7 +660,7 @@ const statCards = computed(() => {
 .percent-text {
   font-size: 12px;
   font-weight: 600;
-  color: #6366f1;
+  color: var(--color-primary-500);
   min-width: 45px;
 }
 

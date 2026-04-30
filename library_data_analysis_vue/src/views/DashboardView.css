@@ -7,14 +7,15 @@
 
 .header {
   background: var(--gradient-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  padding: 0 var(--space-6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 0 var(--space-7);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: var(--header-height);
+  height: calc(var(--header-height) + 4px);
   border-bottom: 1px solid var(--color-neutral-200);
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.06);
   position: fixed;
   top: 0;
   left: 0;
@@ -26,29 +27,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-}
-
-.sidebar-toggle {
-  width: 36px;
-  height: 36px;
-  background: var(--color-neutral-100);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-500);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-base);
-}
-
-.sidebar-toggle:hover {
-  background: var(--color-neutral-200);
-  color: var(--color-neutral-900);
-}
-
-.sidebar-toggle:active {
-  transform: scale(0.92);
 }
 
 .sidebar-toggle svg {
@@ -86,7 +64,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-primary);
+  box-shadow: var(--shadow-primary), 0 0 12px rgba(217, 119, 6, 0.2);
 }
 
 .logo-icon svg {
@@ -205,26 +183,6 @@
   gap: var(--space-2);
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-500);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-base);
-}
-
-.icon-btn:hover {
-  background: var(--color-primary-50);
-  border-color: var(--color-primary-200);
-  color: var(--color-primary-600);
-}
-
 .icon-btn svg {
   width: 18px;
   height: 18px;
@@ -310,7 +268,7 @@
   color: white;
   font-weight: var(--font-bold);
   font-size: var(--text-base);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
 }
 
 .dropdown-user-info {
@@ -572,7 +530,7 @@
   left: 0;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   z-index: 10;
 }
@@ -601,7 +559,7 @@
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   position: relative;
   white-space: nowrap;
@@ -615,11 +573,11 @@
   left: 0;
   top: 50%;
   transform: translateY(-50%) scaleY(0);
-  width: 3px;
-  height: 60%;
+  width: 4px;
+  height: 65%;
   background: var(--gradient-primary);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-item.active::before {
@@ -627,7 +585,7 @@
 }
 
 .nav-item:hover {
-  background: var(--color-neutral-50);
+  background: rgba(217, 119, 6, 0.04);
   color: var(--color-neutral-700);
   transform: translateX(2px);
 }
@@ -636,7 +594,7 @@
   background: var(--color-primary-50);
   color: var(--color-primary-500);
   border-color: var(--color-primary-100);
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.08);
 }
 
 .nav-item.active:hover {
@@ -713,26 +671,12 @@
 .nav-close-btn {
   width: 18px;
   height: 18px;
-  background: transparent;
-  border: none;
-  color: var(--color-neutral-400);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .nav-item:hover .nav-close-btn {
   opacity: 1;
-}
-
-.nav-close-btn:hover {
-  background: var(--color-danger-50);
-  color: var(--color-danger-500);
 }
 
 .nav-overflow {
@@ -801,6 +745,7 @@
   padding: var(--space-4);
   text-align: center;
   transition: opacity 0.2s ease;
+  border-top: 1px solid var(--color-neutral-100);
 }
 
 .sidebar-footer.hidden {
@@ -832,22 +777,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px var(--space-4);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-600);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
   width: 100%;
-  transition: all var(--transition-base);
+  font-weight: var(--font-medium);
 }
 
-.sidebar-back-btn:hover {
-  background: var(--color-primary-50);
-  color: var(--color-primary-500);
-  border-color: var(--color-primary-200);
+.sidebar-back-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .nav-text {
@@ -888,9 +824,10 @@
   flex: 1;
   margin-left: var(--sidebar-width);
   padding: var(--space-6);
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: calc(100vh - var(--header-height));
   overflow-y: auto;
+  background: linear-gradient(135deg, var(--color-neutral-50) 0%, color-mix(in srgb, var(--color-primary-50) 5%, var(--color-neutral-50)) 100%);
 }
 
 .main-content.expanded {
@@ -910,9 +847,9 @@
   width: 40px;
   height: 40px;
   border: 3px solid var(--color-neutral-200);
-  border-top-color: var(--color-primary-500);
+  border-top-color: #d97706;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.8s linear infinite, spinnerPulse 2s ease-in-out infinite;
 }
 
 .loading-text {
@@ -925,6 +862,11 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes spinnerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .tab-panel {
   animation: tabFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -932,7 +874,7 @@
 @keyframes tabFadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;

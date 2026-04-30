@@ -43,5 +43,11 @@ export default {
   goBorrow: '去借書',
   borrowSuccess: '借閱成功！',
   borrowFailed: '借閱失敗',
-  networkError: '網路錯誤，請重試'
+  networkError: '網路錯誤，請重試',
+  returnBook: '歸還',
+  renewBook: '續借',
+  returnSuccess: '歸還成功！',
+  returnFailed: '歸還失敗',
+  renewSuccess: '續借成功！',
+  renewFailed: '續借失敗'
 }

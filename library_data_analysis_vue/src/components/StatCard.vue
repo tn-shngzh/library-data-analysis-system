@@ -5,7 +5,7 @@ defineProps({
   label: { type: String, required: true },
   value: { type: [Number, String], required: true },
   unit: { type: String, default: '' },
-  accent: { type: String, default: '#6366f1' }
+  accent: { type: String, default: '#d97706' }
 })
 </script>
 

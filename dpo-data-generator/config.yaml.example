@@ -1,0 +1,18 @@
+# DPO Data Generator 配置文件
+
+# API 配置
+api_base_url: "https://api.openai.com/v1"  # OpenAI 兼容 API 地址
+api_key: ""  # 您的 API 密钥，留空则使用模拟模式
+model_name: "gpt-3.5-turbo"  # 模型名称
+
+# 生成参数
+max_tokens: 1024  # 最大生成 token 数
+temperature: 0.7  # 温度参数 (0-1)
+
+# 数据目录
+data_dir: "data"  # 数据存储目录
+
+# 输出格式
+# simple: {"prompt": "...", "chosen": "...", "rejected": "..."}
+# chat: {"messages": [...], "rejected": "...", "metadata": {...}}
+output_format: "simple"

@@ -37,6 +37,27 @@ export const useSearch = (delay = 500) => {
     }
   }
 
+  const performAutoSearch = async (page = 1) => {
+    hasSearched.value = true
+    searchPage.value = page
+    try {
+      const res = await bookApi.search(
+        searchKeyword.value,
+        searchCategory.value,
+        page,
+        searchPageSize.value
+      )
+      if (res.ok) {
+        const data = await res.json()
+        searchResults.value = data.books
+        searchTotal.value = data.total
+        searchTotalPages.value = data.total_pages
+      }
+    } catch (e) {
+      console.error('检索失败', e)
+    }
+  }
+
   const resetSearch = () => {
     searchKeyword.value = ''
     searchCategory.value = ''
@@ -45,9 +66,10 @@ export const useSearch = (delay = 500) => {
     searchPage.value = 1
     searchTotalPages.value = 0
     hasSearched.value = false
+    searchLoading.value = false
   }
 
-  const debouncedSearch = debounce(() => performSearch(1), delay)
+  const debouncedSearch = debounce(() => performAutoSearch(1), delay)
 
   watch(searchKeyword, () => {
     if (searchKeyword.value.trim()) {

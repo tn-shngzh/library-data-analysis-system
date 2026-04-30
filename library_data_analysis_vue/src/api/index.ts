@@ -1,3 +1,5 @@
+import router from '../router'
+
 const BASE_URL = ''
 const TIMEOUT = 15000
 const MAX_RETRIES = 2
@@ -28,7 +30,7 @@ const request = async (url, options = {}, retries = 0) => {
       localStorage.removeItem('token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      window.location.href = '/login'
+      router.push('/login')
       throw new Error('认证已过期，请重新登录')
     }
 

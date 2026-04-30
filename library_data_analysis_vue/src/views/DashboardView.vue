@@ -324,7 +324,7 @@ const toggleSidebar = () => {
   <div class="dashboard" @click="hideContextMenu">
     <header class="header">
       <div class="header-left">
-        <button class="sidebar-toggle" @click="activeNavId === 'settings' ? switchTab(previousTabId) : toggleSidebar()" :class="{ collapsed: sidebarCollapsed, 'back-btn': activeNavId === 'settings' }">
+        <button class="sidebar-toggle btn-icon btn-secondary" @click="activeNavId === 'settings' ? switchTab(previousTabId) : toggleSidebar()" :class="{ collapsed: sidebarCollapsed, 'back-btn': activeNavId === 'settings' }">
           <svg v-if="activeNavId === 'settings'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -360,7 +360,7 @@ const toggleSidebar = () => {
         </div>
 
         <div class="header-actions">
-          <button class="icon-btn" :title="t('common.fullscreen')">
+          <button class="icon-btn btn-icon btn-secondary" :title="t('common.fullscreen')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 3 21 3 21 9"/>
               <polyline points="9 21 3 21 3 15"/>
@@ -368,7 +368,7 @@ const toggleSidebar = () => {
               <line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
           </button>
-          <button class="icon-btn" :title="t('common.notification')">
+          <button class="icon-btn btn-icon btn-secondary" :title="t('common.notification')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -448,7 +448,7 @@ const toggleSidebar = () => {
             </a>
           </nav>
           <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
-            <button @click="switchTab('overview')" class="sidebar-back-btn">
+            <button @click="switchTab('overview')" class="sidebar-back-btn btn btn-secondary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
               <span>{{ t('nav.overview') }}</span>
             </button>
@@ -479,7 +479,7 @@ const toggleSidebar = () => {
             <span v-if="item.pinned && sidebarCollapsed" class="pin-indicator"></span>
             <button
               v-if="item.closable && !item.pinned && !sidebarCollapsed"
-              class="nav-close-btn"
+              class="nav-close-btn btn-icon btn-ghost"
               @click.stop="closeTab(item.id)"
               :title="t('common.close')"
             >

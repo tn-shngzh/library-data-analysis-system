@@ -55,7 +55,7 @@ const appearanceSettings = reactive({
   theme: 'light',
   fontSize: 'medium',
   animations: true,
-  accentColor: 'blue',
+  accentColor: 'amber',
   sidebarStyle: 'expanded',
   borderRadius: 'medium',
   compactMode: false,
@@ -64,7 +64,7 @@ const appearanceSettings = reactive({
 
 const accentColors = computed(() => [
   { key: 'blue', value: '#3b82f6', label: t('settings.colorBlue') },
-  { key: 'purple', value: '#8b5cf6', label: t('settings.colorPurple') },
+  { key: 'emerald', value: '#059669', label: t('settings.colorEmerald') },
   { key: 'green', value: '#10b981', label: t('settings.colorGreen') },
   { key: 'orange', value: '#f59e0b', label: t('settings.colorOrange') },
   { key: 'red', value: '#ef4444', label: t('settings.colorRed') },
@@ -174,8 +174,8 @@ const saveAppearanceSettings = () => {
 }
 
 const accentColorMap = {
-  blue: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' },
-  purple: { 50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 800: '#5b21b6', 900: '#4c1d95' },
+  amber: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#d97706', 600: '#b45309', 700: '#92400e', 800: '#78350f', 900: '#451a03' },
+  emerald: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#059669', 600: '#047857', 700: '#065f46', 800: '#064e3b', 900: '#022c22' },
   green: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b' },
   orange: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f' },
   red: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' },
@@ -196,7 +196,7 @@ const applyAppearanceSettings = () => {
     root.removeAttribute('data-theme')
   }
 
-  const colors = accentColorMap[appearanceSettings.accentColor] || accentColorMap.blue
+  const colors = accentColorMap[appearanceSettings.accentColor] || accentColorMap.amber
   Object.entries(colors).forEach(([shade, value]) => {
     root.style.setProperty(`--color-primary-${shade}`, value)
   })
@@ -525,12 +525,12 @@ const getNavIcon = (icon) => {
           <div class="settings-group">
             <h3 class="group-title">{{ t('settings.clearCache') }}</h3>
             <p class="group-desc">{{ t('settings.clearCacheDesc') }}</p>
-            <button class="btn btn-outline" @click="handleClearCache">{{ t('settings.clearCacheBtn') }}</button>
+            <button class="btn btn-secondary" @click="handleClearCache">{{ t('settings.clearCacheBtn') }}</button>
           </div>
           <div class="settings-group">
             <h3 class="group-title">{{ t('settings.exportData') }}</h3>
             <p class="group-desc">{{ t('settings.exportDataDesc') }}</p>
-            <button class="btn btn-outline">{{ t('settings.exportDataBtn') }}</button>
+            <button class="btn btn-secondary">{{ t('settings.exportDataBtn') }}</button>
           </div>
         </div>
         <div v-if="activeMenuValue === 'about'" class="settings-panel">
@@ -563,7 +563,7 @@ const getNavIcon = (icon) => {
           <h3>{{ t('common.confirm') || '确认' }}</h3>
           <p>{{ confirmMessage }}</p>
           <div class="modal-actions">
-            <button class="btn btn-outline" @click="handleCancelConfirm">{{ t('settings.cancel') }}</button>
+            <button class="btn btn-secondary" @click="handleCancelConfirm">{{ t('settings.cancel') }}</button>
             <button class="btn btn-primary" @click="handleConfirm">{{ t('settings.save') }}</button>
           </div>
         </div>
@@ -573,7 +573,7 @@ const getNavIcon = (icon) => {
   <div v-else class="settings-page">
     <header class="header">
       <div class="header-left">
-        <button class="back-btn" @click="goToDashboard">
+        <button class="back-btn btn-icon btn-secondary" @click="goToDashboard">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -628,7 +628,7 @@ const getNavIcon = (icon) => {
               </div>
             </div>
           </transition>
-          <button @click="logout" class="logout-btn" :title="t('common.logout')">
+          <button @click="logout" class="logout-btn btn-icon btn-ghost" :title="t('common.logout')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
         </div>
@@ -650,7 +650,7 @@ const getNavIcon = (icon) => {
           </a>
         </nav>
         <div class="sidebar-footer">
-          <button @click="goToDashboard" class="sidebar-back-btn">
+          <button @click="goToDashboard" class="sidebar-back-btn btn btn-secondary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
             <span>{{ t('nav.overview') }}</span>
           </button>
@@ -901,12 +901,12 @@ const getNavIcon = (icon) => {
               <div class="settings-group">
                 <h3 class="group-title">{{ t('settings.clearCache') }}</h3>
                 <p class="group-desc">{{ t('settings.clearCacheDesc') }}</p>
-                <button class="btn btn-outline" @click="handleClearCache">{{ t('settings.clearCacheBtn') }}</button>
+                <button class="btn btn-secondary" @click="handleClearCache">{{ t('settings.clearCacheBtn') }}</button>
               </div>
               <div class="settings-group">
                 <h3 class="group-title">{{ t('settings.exportData') }}</h3>
                 <p class="group-desc">{{ t('settings.exportDataDesc') }}</p>
-                <button class="btn btn-outline">{{ t('settings.exportDataBtn') }}</button>
+                <button class="btn btn-secondary">{{ t('settings.exportDataBtn') }}</button>
               </div>
             </div>
 
@@ -943,7 +943,7 @@ const getNavIcon = (icon) => {
           <h3>{{ t('common.confirm') || '\u786e\u8ba4' }}</h3>
           <p>{{ confirmMessage }}</p>
           <div class="modal-actions">
-            <button class="btn btn-outline" @click="handleCancelConfirm">{{ t('settings.cancel') }}</button>
+            <button class="btn btn-secondary" @click="handleCancelConfirm">{{ t('settings.cancel') }}</button>
             <button class="btn btn-primary" @click="handleConfirm">{{ t('settings.save') }}</button>
           </div>
         </div>
@@ -957,8 +957,6 @@ const getNavIcon = (icon) => {
 .settings-page { min-height: 100vh; background: var(--gradient-surface); font-family: var(--font-sans); }
 .header { background: var(--gradient-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 0 var(--space-6); display: flex; justify-content: space-between; align-items: center; height: var(--header-height); border-bottom: 1px solid var(--color-neutral-200); position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-fixed); }
 .header-left { display: flex; align-items: center; gap: var(--space-3); }
-.back-btn { width: 36px; height: 36px; background: var(--color-neutral-100); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); color: var(--color-neutral-500); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition-base); }
-.back-btn:hover { background: var(--color-neutral-200); color: var(--color-neutral-900); }
 .back-btn svg { width: 18px; height: 18px; }
 .logo-wrapper { display: flex; align-items: center; gap: var(--space-3); }
 .logo-icon { width: 38px; height: 38px; background: var(--gradient-primary); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-primary); }
@@ -995,9 +993,7 @@ const getNavIcon = (icon) => {
 .logout-item:hover { background: var(--color-danger-50); color: var(--color-danger-600); }
 .dropdown-enter-active, .dropdown-leave-active { transition: all var(--transition-base); }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-8px) scale(0.96); }
-.logout-btn { width: 32px; height: 32px; background: transparent; color: var(--color-neutral-400); border: none; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition-base); }
 .logout-btn svg { width: 18px; height: 18px; }
-.logout-btn:hover { background: var(--color-danger-50); color: var(--color-danger-500); }
 .layout { display: flex; margin-top: var(--header-height); min-height: calc(100vh - var(--header-height)); }
 .sidebar { width: var(--sidebar-width); background: var(--gradient-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-right: 1px solid var(--color-neutral-200); padding: var(--space-4) 0; display: flex; flex-direction: column; position: fixed; top: var(--header-height); bottom: 0; left: 0; overflow-y: auto; }
 .nav-menu { flex: 1; padding: 0 var(--space-3); }
@@ -1012,8 +1008,7 @@ const getNavIcon = (icon) => {
 .nav-item.active .nav-desc { color: var(--color-primary-400); }
 .nav-indicator { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 20px; background: var(--gradient-primary); border-radius: 0 2px 2px 0; }
 .sidebar-footer { padding: var(--space-3) var(--space-3); border-top: 1px solid var(--color-neutral-200); }
-.sidebar-back-btn { display: flex; align-items: center; gap: var(--space-2); padding: 10px var(--space-4); background: var(--color-neutral-100); color: var(--color-neutral-600); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); cursor: pointer; font-size: var(--text-sm); font-weight: var(--font-medium); width: 100%; transition: all var(--transition-base); }
-.sidebar-back-btn:hover { background: var(--color-primary-50); color: var(--color-primary-500); border-color: var(--color-primary-200); }
+.sidebar-back-btn { width: 100%; background: var(--color-neutral-100); font-weight: var(--font-medium); }
 .sidebar-back-btn svg { width: 16px; height: 16px; }
 .main-content { flex: 1; margin-left: var(--sidebar-width); padding: var(--space-8); min-height: calc(100vh - var(--header-height)); overflow-y: auto; }
 .content-area { max-width: 720px; }
@@ -1053,16 +1048,8 @@ const getNavIcon = (icon) => {
 .strength-text.medium { color: var(--color-warning-500); }
 .strength-text.strong { color: var(--color-success-500); }
 .form-actions { margin-top: var(--space-6); display: flex; gap: var(--space-3); }
-.btn { padding: 10px 20px; border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-semibold); cursor: pointer; transition: all var(--transition-base); border: none; display: inline-flex; align-items: center; gap: var(--space-2); }
-.btn-primary { background: var(--gradient-primary); color: white; box-shadow: var(--shadow-primary); }
-.btn-primary:hover { box-shadow: var(--shadow-primary-lg); transform: translateY(-1px); }
 .btn-warning { background: var(--color-warning-500); color: white; }
 .btn-warning:hover { background: var(--color-warning-600); transform: translateY(-1px); }
-.btn-danger { background: var(--color-danger-50); color: var(--color-danger-500); border: 1px solid var(--color-danger-200); }
-.btn-danger:hover:not(:disabled) { background: var(--color-danger-100); }
-.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-outline { background: var(--color-neutral-0); color: var(--color-neutral-700); border: 1px solid var(--color-neutral-300); }
-.btn-outline:hover { background: var(--color-neutral-50); border-color: var(--color-primary-300); color: var(--color-primary-500); }
 .security-cards { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-8); }
 .security-card { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); background: var(--color-neutral-0); border-radius: var(--radius-xl); border: 1px solid var(--color-neutral-200); }
 .security-card.safe { border-color: var(--color-success-200); background: var(--color-success-50); }

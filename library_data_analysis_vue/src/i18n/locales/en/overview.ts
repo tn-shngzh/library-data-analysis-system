@@ -51,5 +51,6 @@ export default {
   noBorrowTypeDataDesc: 'No borrow type ratio data available',
   noTopCategoryData: 'No Ranking Data',
   noTopCategoryDataDesc: 'No category borrowing ranking data available',
-  other: 'Other'
+  other: 'Other',
+  total: 'Total'
 }

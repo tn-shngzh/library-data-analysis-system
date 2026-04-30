@@ -17,7 +17,7 @@ defineEmits(['refresh'])
         <p v-if="description" class="page-desc">{{ description }}</p>
       </div>
       <div v-if="showRefresh" class="header-actions">
-        <button class="refresh-btn" @click="$emit('refresh')" :disabled="loading">
+        <button class="refresh-btn btn btn-secondary btn-sm" @click="$emit('refresh')" :disabled="loading">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'spinning': loading }">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -60,32 +60,6 @@ defineEmits(['refresh'])
   display: flex;
   align-items: center;
   gap: var(--space-3);
-}
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-500);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.refresh-btn:hover {
-  background: var(--color-neutral-50);
-  border-color: var(--color-neutral-300);
-  color: var(--color-neutral-900);
-}
-
-.refresh-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .refresh-btn svg {

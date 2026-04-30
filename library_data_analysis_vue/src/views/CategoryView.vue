@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { bookApi } from '@/api/books'
-import { borrowApi } from '@/api/borrows'
 
 const { t } = useI18n()
 
@@ -37,7 +36,7 @@ const topCategory = computed(() => {
 })
 
 const statCards = computed(() => [
-  { i18nKey: 'category.categoryCount', value: categories.value.length, icon: 'layers', color: '#6366f1' },
+  { i18nKey: 'category.categoryCount', value: categories.value.length, icon: 'layers', color: '#d97706' },
   { i18nKey: 'category.totalBooks', value: formatNumber(totalBooks.value), icon: 'book', color: '#3b82f6' },
   { i18nKey: 'category.totalBorrows', value: formatNumber(totalBorrows.value), icon: 'activity', color: '#10b981' },
   { i18nKey: 'category.topCategory', value: topCategory.value, icon: 'star', color: '#f59e0b' }
@@ -47,10 +46,10 @@ const fetchCategoryData = async () => {
   loading.value = true
   try {
     const bookData = await bookApi.getAll()
-    if (bookData.categories) categories.value = bookData.categories
-
-    const borrowData = await borrowApi.getAll()
-    if (borrowData.degreeStats) borrowByCategory.value = borrowData.degreeStats
+    if (bookData.categories) {
+      categories.value = bookData.categories
+      borrowByCategory.value = bookData.categories
+    }
   } catch (e) {
     console.error('Failed to fetch category data', e)
   } finally {
@@ -60,8 +59,10 @@ const fetchCategoryData = async () => {
 
 watch(() => props.allData, (data) => {
   if (data) {
-    if (data.books?.categories) categories.value = data.books.categories
-    if (data.borrows?.degreeStats) borrowByCategory.value = data.borrows.degreeStats
+    if (data.books?.categories) {
+      categories.value = data.books.categories
+      borrowByCategory.value = data.books.categories
+    }
     if (data.overview?.categories) {
       if (!categories.value.length) categories.value = data.overview.categories
     }
@@ -80,7 +81,7 @@ const maxCategoryCount = computed(() => {
   return Math.max(...categories.value.map(c => c.count || 0))
 })
 
-const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#ef4444']
+const barColors = ['#d97706', '#fbbf24', '#a78bfa', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#059669', '#ef4444']
 </script>
 
 <template>
@@ -90,7 +91,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
         <h1>{{ t('category.title') }}</h1>
         <p>{{ t('category.desc') }}</p>
       </div>
-      <button class="refresh-btn" @click="fetchCategoryData" :disabled="loading">
+      <button class="refresh-btn btn btn-secondary btn-sm" @click="fetchCategoryData" :disabled="loading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 4v6h-6"/>
           <path d="M1 20v-6h6"/>
@@ -133,8 +134,8 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn" :class="{ active: activeTab === 'category' }" @click="activeTab = 'category'">{{ t('category.categoryRatio') }}</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'borrow' }" @click="activeTab = 'borrow'">{{ t('category.borrowAnalysis') }}</button>
+        <button class="tab-btn btn-tab" :class="{ active: activeTab === 'category' }" @click="activeTab = 'category'">{{ t('category.categoryRatio') }}</button>
+        <button class="tab-btn btn-tab" :class="{ active: activeTab === 'borrow' }" @click="activeTab = 'borrow'">{{ t('category.borrowAnalysis') }}</button>
       </div>
 
       <div v-if="activeTab === 'category'" class="card">
@@ -164,7 +165,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
       <div v-if="activeTab === 'borrow'" class="card">
         <div class="card-header">
-          <h3>{{ t('category.readerBorrowDistribution') }}</h3>
+          <h3>{{ t('category.borrowAnalysis') }}</h3>
         </div>
         <div v-if="borrowByCategory.length" class="category-chart">
           <div class="bar-list">
@@ -248,32 +249,8 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
 .header-info p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--color-neutral-500);
   margin: 0;
-}
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.refresh-btn:hover {
-  border-color: #6366f1;
-  color: #6366f1;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .refresh-btn svg {
@@ -293,8 +270,8 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 12px;
@@ -312,13 +289,13 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 }
 
 .stat-card {
-  background: white;
+  background: var(--color-neutral-0);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-neutral-200);
   transition: all 0.2s;
 }
 
@@ -334,7 +311,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--accent) 10%, white);
+  background: color-mix(in srgb, var(--accent) 10%, var(--color-neutral-0));
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -375,32 +352,13 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
 .tab-btn {
   flex: 1;
-  padding: 10px 16px;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn.active {
-  background: white;
-  color: #6366f1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn:hover:not(.active) {
-  color: #334155;
 }
 
 .card {
-  background: white;
+  background: var(--color-neutral-0);
   border-radius: 12px;
   padding: 24px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-neutral-200);
   margin-bottom: 16px;
 }
 
@@ -447,7 +405,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
 .bar-value {
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-neutral-500);
 }
 
 .bar-track {
@@ -481,7 +439,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
   font-size: 12px;
   font-weight: 600;
   color: #94a3b8;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--color-neutral-200);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -489,12 +447,12 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 .data-table td {
   padding: 12px 16px;
   font-size: 14px;
-  color: #475569;
+  color: var(--color-neutral-600);
   border-bottom: 1px solid #f1f5f9;
 }
 
 .data-table tbody tr:hover td {
-  background: #f8fafc;
+  background: var(--color-neutral-50);
 }
 
 .name-cell {
@@ -504,7 +462,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
 .count-cell {
   font-weight: 600;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 
 .rank-badge {
@@ -516,15 +474,15 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-neutral-0);
 }
 
-.rank-1 { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); }
-.rank-3 { background: linear-gradient(135deg, #d97706, #92400e); }
+.rank-1 { background: linear-gradient(135deg, #f59e0b, var(--color-primary-500)); }
+.rank-2 { background: linear-gradient(135deg, #94a3b8, var(--color-neutral-500)); }
+.rank-3 { background: linear-gradient(135deg, var(--color-primary-500), #92400e); }
 .rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10 {
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--color-neutral-500);
 }
 
 .percent-bar {
@@ -535,7 +493,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 
 .percent-fill {
   height: 6px;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, var(--color-primary-500), #fbbf24);
   border-radius: 3px;
   min-width: 4px;
   flex: 1;
@@ -546,7 +504,7 @@ const barColors = ['#6366f1', '#818cf8', '#a78bfa', '#06b6d4', '#10b981', '#f59e
 .percent-text {
   font-size: 12px;
   font-weight: 600;
-  color: #6366f1;
+  color: var(--color-primary-500);
   min-width: 45px;
 }
 

@@ -51,5 +51,6 @@ export default {
   noBorrowTypeDataDesc: '貸出タイプ比率データがありません',
   noTopCategoryData: 'ランキングデータなし',
   noTopCategoryDataDesc: 'カテゴリ貸出ランキングデータがありません',
-  other: 'その他'
+  other: 'その他',
+  total: '合計'
 }

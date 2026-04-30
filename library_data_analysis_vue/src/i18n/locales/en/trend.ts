@@ -16,5 +16,8 @@ export default {
   month: 'Month',
   activeCount: 'Active Count',
   change: 'MoM Change',
-  percent: 'Percentage'
+  percent: 'Percentage',
+  rawData: 'Raw Data',
+  movingAvg: 'Moving Average',
+  trendLine: 'Trend Line'
 }

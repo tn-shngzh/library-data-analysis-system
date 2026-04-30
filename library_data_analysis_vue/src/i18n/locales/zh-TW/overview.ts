@@ -51,5 +51,6 @@ export default {
   noBorrowTypeDataDesc: '當前沒有借閱類型佔比資料',
   noTopCategoryData: '暫無排行資料',
   noTopCategoryDataDesc: '當前沒有分類借閱排行資料',
-  other: '其他'
+  other: '其他',
+  total: '合計'
 }

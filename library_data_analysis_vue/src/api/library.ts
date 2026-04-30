@@ -19,5 +19,7 @@ export const libraryApi = {
 
   getMyBorrows: () => get('/api/borrows/my'),
 
-  borrowBook: (bookId) => post('/api/borrows/borrow', JSON.stringify({ book_id: bookId }))
+  borrowBook: (bookId) => post('/api/borrows/borrow', JSON.stringify({ book_id: bookId })),
+  returnBook: (bookId) => post('/api/borrows/return', JSON.stringify({ book_id: bookId })),
+  renewBook: (bookId) => post('/api/borrows/renew', JSON.stringify({ book_id: bookId }))
 }

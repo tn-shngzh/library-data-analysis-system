@@ -16,5 +16,8 @@ export default {
   month: '月',
   activeCount: 'アクティブ数',
   change: '前月比',
-  percent: '割合'
+  percent: '割合',
+  rawData: '実データ',
+  movingAvg: '移動平均線',
+  trendLine: 'トレンドライン'
 }

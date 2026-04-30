@@ -43,5 +43,19 @@ export default {
   goBorrow: 'Go Borrow',
   borrowSuccess: 'Borrowed successfully!',
   borrowFailed: 'Borrow failed',
-  networkError: 'Network error, please retry'
+  networkError: 'Network error, please retry',
+  returnBook: 'Return',
+  renewBook: 'Renew',
+  returnSuccess: 'Returned successfully!',
+  returnFailed: 'Return failed',
+  renewSuccess: 'Renewed successfully!',
+  renewFailed: 'Renew failed',
+  dataLoadFailed: 'Partial data load failed',
+  retry: 'Retry',
+  someDataFailed: 'Some data failed to load, you can still use the loaded data',
+  libraryStats: 'Library Stats',
+  myStats: 'My Stats',
+  statMyBorrows: 'My Borrows',
+  statMyReturns: 'My Returns',
+  statMyCurrentBorrowed: 'Currently Borrowed'
 }
