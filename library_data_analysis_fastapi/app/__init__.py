@@ -9,7 +9,7 @@ DB_CONFIG = {
     "port": os.getenv("DB_PORT", "5432"),
     "dbname": os.getenv("DB_NAME", "library_db"),
     "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "")
+    "password": os.getenv("DB_PASSWORD", "GXYL2405")
 }
 
 CORS_ORIGINS = [

@@ -1,10 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, reactive, computed, watch, nextTick, defineAsyncComponent, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { overviewApi } from '@/api/overview'
-import { readerApi } from '@/api/readers'
-import { bookApi } from '@/api/books'
-import { borrowApi } from '@/api/borrows'
+import { useDataStore } from '@/stores/data'
 import { useAuth } from '@/composables/useAuth'
 import { useTime } from '@/composables/useTime'
 import { useDropdown } from '@/composables/useDropdown'
@@ -16,10 +13,13 @@ import ReaderView from './ReaderView.vue'
 import TrendView from './TrendView.vue'
 import BookView from './BookView.vue'
 import PredictView from './PredictView.vue'
+import AnalysisView from './AnalysisView.vue'
 import ReportView from './ReportView.vue'
+import ImportView from './ImportView.vue'
 import SettingsView from './SettingsView.vue'
 
 const { t } = useI18n()
+const store = useDataStore()
 const { username, role, checkAuth, logout } = useAuth()
 const { currentTime } = useTime()
 const { showDropdown: showUserDropdown, dropdownRef: userMenuRef, toggleDropdown: toggleUserDropdown } = useDropdown()
@@ -27,7 +27,6 @@ const { showDropdown: showUserDropdown, dropdownRef: userMenuRef, toggleDropdown
 const userDropdownPos = reactive({ top: 0, right: 0 })
 const settingsActiveMenu = ref('profile')
 
-const dataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
 const activeNavId = ref('overview')
 const contextMenuVisible = ref(false)
@@ -43,62 +42,17 @@ const navItems = ref([
   { id: 'trend', i18nKey: 'nav.trend', icon: 'trending-up', pinned: false, closable: true, loaded: false },
   { id: 'book', i18nKey: 'nav.book', icon: 'book-plus', pinned: false, closable: true, loaded: false },
   { id: 'predict', i18nKey: 'nav.predict', icon: 'clock', pinned: false, closable: true, loaded: false },
+  { id: 'analysis', i18nKey: 'nav.analysis', icon: 'bar-chart', pinned: false, closable: true, loaded: false },
   { id: 'report', i18nKey: 'nav.report', icon: 'file-text', pinned: false, closable: true, loaded: false },
-  { id: 'settings', i18nKey: 'nav.settings', icon: 'settings', pinned: false, closable: true, loaded: false }
+  { id: 'dataImport', i18nKey: 'nav.dataImport', icon: 'upload', pinned: false, closable: true, loaded: false }
 ])
 
-const MAX_VISIBLE_TABS = 7
-const showOverflow = computed(() => navItems.value.length > MAX_VISIBLE_TABS)
-const visibleItems = computed(() => {
-  if (!showOverflow.value) return navItems.value
-  return navItems.value.slice(0, MAX_VISIBLE_TABS)
-})
-const overflowItems = computed(() => {
-  if (!showOverflow.value) return []
-  return navItems.value.slice(MAX_VISIBLE_TABS)
-})
-const overflowMenuVisible = ref(false)
-
-const settingsMenuItems = computed(() => [
-  { id: 'profile', i18nKey: 'settings.profile', icon: 'user', desc: t('settings.profileDesc') },
-  { id: 'password', i18nKey: 'settings.password', icon: 'lock', desc: t('settings.passwordDesc') },
-  { id: 'security', i18nKey: 'settings.security', icon: 'shield', desc: t('settings.securityDesc') },
-  { id: 'appearance', i18nKey: 'settings.appearance', icon: 'palette', desc: t('settings.appearanceDesc') },
-  { id: 'language', i18nKey: 'settings.language', icon: 'globe', desc: t('settings.languageDesc') },
-  { id: 'notification', i18nKey: 'settings.notification', icon: 'bell', desc: t('settings.notificationDesc') },
-  { id: 'privacy', i18nKey: 'settings.privacy', icon: 'eye', desc: t('settings.privacyDesc') },
-  { id: 'about', i18nKey: 'settings.about', icon: 'info', desc: t('settings.aboutDesc') }
-])
-
-const getSettingsNavIcon = (icon) => {
-  const icons = {
-    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-    palette: '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04-.23-.29-.38-.63-.38-1.04 0-.93.76-1.69 1.69-1.69H16c3.31 0 6-2.69 6-6 0-5.5-4.5-9.83-10-9.83z"/>',
-    globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
-    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-    eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
-    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'
-  }
-  return icons[icon] || icons.info
-}
-
-const allData = reactive({
-  overview: { stats: null, categories: null, recentBooks: null },
-  readers: { stats: null, readerTypes: null, monthlyTrend: null, topReaders: null },
-  books: { stats: null, categories: null, hotBooks: null },
-  borrows: { stats: null, actionStats: null, degreeStats: null, topBorrowers: null, topBooks: null, recentBorrows: null }
-})
+const visibleItems = computed(() => navItems.value)
 
 const tabScrollPositions = reactive({})
 const tabTransitionName = ref('slide-left')
 
 const saveTabState = () => {
-  const mainEl = document.querySelector('.main-content')
-  if (mainEl) {
-    tabScrollPositions[activeNavId.value] = mainEl.scrollTop
-  }
   setCache('sidebar_active_tab', activeNavId.value)
   setCache('sidebar_nav_order', navItems.value.map(n => n.id))
   setCache('sidebar_nav_pinned', navItems.value.filter(n => n.pinned).map(n => n.id))
@@ -138,19 +92,21 @@ const previousTabId = ref('overview')
 
 const switchTab = (id) => {
   if (activeNavId.value === id) return
+  const mainEl = document.querySelector('.main-content')
+  if (mainEl) {
+    tabScrollPositions[activeNavId.value] = mainEl.scrollTop
+  }
   const oldIndex = navItems.value.findIndex(n => n.id === activeNavId.value)
   const newIndex = navItems.value.findIndex(n => n.id === id)
   tabTransitionName.value = newIndex > oldIndex ? 'slide-left' : 'slide-right'
-  saveTabState()
   previousTabId.value = activeNavId.value
   activeNavId.value = id
+  saveTabState()
   const item = navItems.value.find(n => n.id === id)
   if (item && !item.loaded) item.loaded = true
   nextTick(() => {
     const mainEl = document.querySelector('.main-content')
-    if (mainEl && tabScrollPositions[id] !== undefined) {
-      mainEl.scrollTop = tabScrollPositions[id]
-    }
+    if (mainEl) mainEl.scrollTop = 0
   })
 }
 
@@ -232,52 +188,6 @@ const onDragEnd = (e) => {
   document.querySelectorAll('.nav-item.dragging').forEach(el => el.classList.remove('dragging'))
 }
 
-const toggleOverflow = () => {
-  overflowMenuVisible.value = !overflowMenuVisible.value
-}
-
-const preloadData = async () => {
-  const loadModule = async (apiGetAll, dataKey, mappings) => {
-    try {
-      const result = await apiGetAll()
-      for (const [resultKey, targetKey] of mappings) {
-        if (result[resultKey]) allData[targetKey][resultKey] = result[resultKey]
-      }
-    } catch (e) {
-      console.error(`预加载${dataKey}数据失败`, e)
-    }
-  }
-
-  await Promise.all([
-    loadModule(overviewApi.getAll, 'overview', [
-      ['stats', 'overview'],
-      ['categories', 'overview'],
-      ['recentBooks', 'overview']
-    ]),
-    loadModule(readerApi.getAll, 'readers', [
-      ['stats', 'readers'],
-      ['readerTypes', 'readers'],
-      ['monthlyTrend', 'readers'],
-      ['topReaders', 'readers']
-    ]),
-    loadModule(bookApi.getAll, 'books', [
-      ['stats', 'books'],
-      ['categories', 'books'],
-      ['hotBooks', 'books']
-    ]),
-    loadModule(borrowApi.getAll, 'borrows', [
-      ['stats', 'borrows'],
-      ['actionStats', 'borrows'],
-      ['degreeStats', 'borrows'],
-      ['topBorrowers', 'borrows'],
-      ['topBooks', 'borrows'],
-      ['recentBorrows', 'borrows']
-    ])
-  ])
-
-  dataLoaded.value = true
-}
-
 const getNavIcon = (icon) => {
   const icons = {
     grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
@@ -288,7 +198,8 @@ const getNavIcon = (icon) => {
     'book-plus': '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="12" y1="6" x2="12" y2="12"/><line x1="9" y1="9" x2="15" y2="9"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
+    'bar-chart': '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
   }
   return icons[icon] || icons.grid
 }
@@ -296,8 +207,9 @@ const getNavIcon = (icon) => {
 onMounted(async () => {
   if (!checkAuth()) return
   restoreTabState()
-  navItems.value.find(n => n.id === activeNavId.value).loaded = true
-  await preloadData()
+  const activeItem = navItems.value.find(n => n.id === activeNavId.value)
+  if (activeItem) activeItem.loaded = true
+  await store.preloadAll()
   document.addEventListener('click', hideContextMenu)
   const savedSidebar = localStorage.getItem('sidebar_collapsed')
   if (savedSidebar === 'true') sidebarCollapsed.value = true
@@ -324,11 +236,8 @@ const toggleSidebar = () => {
   <div class="dashboard" @click="hideContextMenu">
     <header class="header">
       <div class="header-left">
-        <button class="sidebar-toggle btn-icon btn-secondary" @click="activeNavId === 'settings' ? switchTab(previousTabId) : toggleSidebar()" :class="{ collapsed: sidebarCollapsed, 'back-btn': activeNavId === 'settings' }">
-          <svg v-if="activeNavId === 'settings'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="sidebar-toggle btn-icon btn-secondary" @click="toggleSidebar()" :class="{ collapsed: sidebarCollapsed }">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="3" y1="6" x2="21" y2="6"/>
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
@@ -430,31 +339,6 @@ const toggleSidebar = () => {
     
     <div class="layout">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-        <template v-if="activeNavId === 'settings'">
-          <div class="sidebar-settings-header">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span class="sidebar-settings-title" :class="{ hidden: sidebarCollapsed }">{{ t('settings.title') }}</span>
-          </div>
-          <nav class="nav-menu">
-            <a v-for="item in settingsMenuItems" :key="item.id" class="nav-item" :class="{ active: settingsActiveMenu === item.id }" @click="settingsActiveMenu = item.id">
-              <div class="nav-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getSettingsNavIcon(item.icon)"/>
-              </div>
-              <div class="nav-text" :class="{ hidden: sidebarCollapsed }">
-                <span class="nav-label">{{ t(item.i18nKey) }}</span>
-                <span class="nav-desc">{{ item.desc }}</span>
-              </div>
-              <div class="nav-indicator" v-if="settingsActiveMenu === item.id"></div>
-            </a>
-          </nav>
-          <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
-            <button @click="switchTab('overview')" class="sidebar-back-btn btn btn-secondary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>{{ t('nav.overview') }}</span>
-            </button>
-          </div>
-        </template>
-        <template v-else>
         <nav class="nav-menu">
           <div
             v-for="(item, index) in visibleItems"
@@ -473,7 +357,7 @@ const toggleSidebar = () => {
             @dragend="onDragEnd"
           >
             <div class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getNavIcon(item.icon)"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="getNavIcon(item.icon)"/>
             </div>
             <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t(item.i18nKey) }}</span>
             <span v-if="item.pinned && sidebarCollapsed" class="pin-indicator"></span>
@@ -488,71 +372,49 @@ const toggleSidebar = () => {
               </svg>
             </button>
           </div>
-
-          <div v-if="showOverflow" class="nav-overflow" @click.stop="toggleOverflow">
-            <div class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-              </svg>
-            </div>
-            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t('common.more') }}</span>
-
-            <transition name="dropdown">
-              <div v-if="overflowMenuVisible" class="overflow-dropdown" @click.stop>
-                <div
-                  v-for="item in overflowItems"
-                  :key="item.id"
-                  class="overflow-item"
-                  :class="{ active: activeNavId === item.id }"
-                  @click="switchTab(item.id); overflowMenuVisible = false"
-                  @contextmenu="showContextMenu($event, item.id)"
-                >
-                  <div class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-html="getNavIcon(item.icon)"/>
-                  </div>
-                  <span>{{ t(item.i18nKey) }}</span>
-                </div>
-              </div>
-            </transition>
-          </div>
         </nav>
         
         <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
           <div class="version-badge">v1.0.0</div>
         </div>
-        </template>
       </aside>
       
       <main class="main-content" :class="{ expanded: sidebarCollapsed }">
-        <div v-if="!dataLoaded" class="loading-overlay">
+        <div v-if="!store.loaded" class="loading-overlay">
           <div class="loading-spinner"></div>
           <span class="loading-text">{{ t('common.loading') }}</span>
         </div>
         <template v-else>
           <transition :name="tabTransitionName" mode="out-in">
             <div v-if="activeNavId === 'overview'" key="overview" class="tab-panel">
-              <OverviewView :all-data="allData" />
+              <OverviewView :all-data="store" @navigate="switchTab" />
             </div>
             <div v-else-if="activeNavId === 'category'" key="category" class="tab-panel">
-              <CategoryView :all-data="allData" />
+              <CategoryView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'borrow'" key="borrow" class="tab-panel">
-              <BorrowView :all-data="allData" />
+              <BorrowView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'reader'" key="reader" class="tab-panel">
-              <ReaderView :all-data="allData" />
+              <ReaderView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'trend'" key="trend" class="tab-panel">
-              <TrendView :all-data="allData" />
+              <TrendView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'book'" key="book" class="tab-panel">
-              <BookView :all-data="allData" />
+              <BookView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'predict'" key="predict" class="tab-panel">
-              <PredictView :all-data="allData" />
+              <PredictView :all-data="store" />
+            </div>
+            <div v-else-if="activeNavId === 'analysis'" key="analysis" class="tab-panel">
+              <AnalysisView />
             </div>
             <div v-else-if="activeNavId === 'report'" key="report" class="tab-panel">
-              <ReportView :all-data="allData" />
+              <ReportView :all-data="store" />
+            </div>
+            <div v-else-if="activeNavId === 'dataImport'" key="dataImport" class="tab-panel">
+              <ImportView />
             </div>
             <div v-else-if="activeNavId === 'settings'" key="settings" class="tab-panel">
               <SettingsView :embedded="true" v-model:activeMenu="settingsActiveMenu" />

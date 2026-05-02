@@ -18,8 +18,10 @@ export const readerApi = {
     for (let i = 0; i < calls.length; i++) {
       const [key] = calls[i]
       const res = responses[i]
-      if (res.status === 'fulfilled' && res.value.ok) {
-        result[key] = await res.value.json()
+      if (res.status === 'fulfilled') {
+        result[key] = res.value
+      } else {
+        console.error(`readerApi.getAll: ${key} 请求失败`, res.reason)
       }
     }
     return result

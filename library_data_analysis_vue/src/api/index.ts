@@ -4,9 +4,43 @@ const BASE_URL = ''
 const TIMEOUT = 15000
 const MAX_RETRIES = 2
 
-const request = async (url, options = {}, retries = 0) => {
+interface CacheEntry {
+  data: any
+  timestamp: number
+  staleTime: number
+  maxAge: number
+}
+
+const swrCache = new Map<string, CacheEntry>()
+
+const DEFAULT_STALE_TIME = 30 * 1000
+const DEFAULT_MAX_AGE = 5 * 60 * 1000
+
+const PATH_TTL_CONFIG: Record<string, { staleTime: number; maxAge: number }> = {
+  '/api/overview/stats': { staleTime: 60 * 1000, maxAge: 5 * 60 * 1000 },
+  '/api/overview/historical-stats': { staleTime: 2 * 60 * 1000, maxAge: 5 * 60 * 1000 },
+  '/api/overview/categories': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+  '/api/overview/top-books': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+  '/api/borrows/stats': { staleTime: 60 * 1000, maxAge: 5 * 60 * 1000 },
+  '/api/borrows/daily-trend': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+  '/api/readers/monthly-trend': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+  '/api/readers/top': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+}
+
+function getTTLConfig(url: string) {
+  for (const [path, config] of Object.entries(PATH_TTL_CONFIG)) {
+    if (url.startsWith(path)) return config
+  }
+  return { staleTime: DEFAULT_STALE_TIME, maxAge: DEFAULT_MAX_AGE }
+}
+
+const pendingRequests = new Map<string, Promise<any>>()
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const rawRequest = async (url: string, options: RequestInit = {}, retries = 0): Promise<Response> => {
   const token = localStorage.getItem('token')
-  const headers = { ...options.headers }
+  const headers: Record<string, string> = { ...(options.headers as Record<string, string>) }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -34,11 +68,17 @@ const request = async (url, options = {}, retries = 0) => {
       throw new Error('认证已过期，请重新登录')
     }
 
+    if (response.status >= 500 && retries < MAX_RETRIES) {
+      await delay(1000)
+      return rawRequest(url, options, retries + 1)
+    }
+
     return response
-  } catch (error) {
+  } catch (error: any) {
     if (error.message === '认证已过期，请重新登录') throw error
-    if (error.name === 'AbortError' && retries < MAX_RETRIES) {
-      return request(url, options, retries + 1)
+    if (retries < MAX_RETRIES) {
+      await delay(1000)
+      return rawRequest(url, options, retries + 1)
     }
     console.error(`请求失败: ${url}`, error)
     throw error
@@ -47,10 +87,74 @@ const request = async (url, options = {}, retries = 0) => {
   }
 }
 
-export const get = (url) => request(url)
+export const get = async (url: string): Promise<any> => {
+  const config = getTTLConfig(url)
+  const cached = swrCache.get(url)
+  const now = Date.now()
 
-export const post = (url, body) =>
-  request(url, { method: 'POST', body })
+  if (cached) {
+    const age = now - cached.timestamp
+    if (age < config.staleTime) {
+      return cached.data
+    }
+    if (age < config.maxAge) {
+      if (!pendingRequests.has(url)) {
+        const bgPromise = rawRequest(url).then(async (res) => {
+          if (res.ok) {
+            const data = await res.json()
+            swrCache.set(url, { data, timestamp: Date.now(), staleTime: config.staleTime, maxAge: config.maxAge })
+            return data
+          }
+          throw new Error(`HTTP ${res.status}`)
+        }).catch((err) => {
+          console.warn(`Background revalidate failed for ${url}:`, err)
+          return cached.data
+        }).finally(() => {
+          pendingRequests.delete(url)
+        })
+        pendingRequests.set(url, bgPromise)
+      }
+      return cached.data
+    }
+  }
 
-export const postForm = (url, formData) =>
-  request(url, { method: 'POST', body: formData })
+  if (pendingRequests.has(url)) {
+    return pendingRequests.get(url)!
+  }
+
+  const promise = rawRequest(url).then(async (res) => {
+    if (res.ok) {
+      const data = await res.json()
+      swrCache.set(url, { data, timestamp: Date.now(), staleTime: config.staleTime, maxAge: config.maxAge })
+      return data
+    }
+    throw new Error(`HTTP ${res.status}`)
+  }).finally(() => {
+    pendingRequests.delete(url)
+  })
+
+  pendingRequests.set(url, promise)
+  return promise
+}
+
+export const post = (url: string, body: any) => {
+  invalidateCachePrefix('/api/')
+  return rawRequest(url, { method: 'POST', body: JSON.stringify(body) })
+}
+
+export const postForm = (url: string, formData: FormData) => {
+  invalidateCachePrefix('/api/')
+  return rawRequest(url, { method: 'POST', body: formData })
+}
+
+export const invalidateCachePrefix = (prefix: string) => {
+  for (const key of swrCache.keys()) {
+    if (key.startsWith(prefix)) {
+      swrCache.delete(key)
+    }
+  }
+}
+
+export const invalidateCache = (url: string) => {
+  swrCache.delete(url)
+}
