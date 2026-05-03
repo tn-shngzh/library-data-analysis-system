@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.database import init_db_pool, get_db_connection, release_db_connection
-from app.routers import auth, overview, readers, books, borrows
+from app.routers import auth, overview, readers, books, borrows, analysis, imports, insights
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +86,9 @@ app.include_router(overview.router)
 app.include_router(readers.router)
 app.include_router(books.router)
 app.include_router(borrows.router)
+app.include_router(analysis.router)
+app.include_router(imports.router)
+app.include_router(insights.router)
 
 
 @app.get("/")

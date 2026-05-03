@@ -6,6 +6,8 @@ export default {
   trend: 'トレンド分析',
   book: '図書分析',
   predict: '予測センター',
+  analysis: 'データ分析',
   report: 'データレポート',
+  dataImport: 'データインポート',
   settings: 'システム管理'
 }

@@ -9,10 +9,13 @@ import borrow from './borrow'
 import category from './category'
 import trend from './trend'
 import predict from './predict'
+import analysis from './analysis'
 import report from './report'
+import imports from './import'
+import insights from './insights'
 import settings from './settings'
 import login from './login'
 import register from './register'
 import library from './library'
 
-export default { nav, common, overview, months, degree, reader, book, borrow, category, trend, predict, report, settings, login, register, library }
+export default { nav, common, overview, months, degree, reader, book, borrow, category, trend, predict, analysis, report, imports, insights, settings, login, register, library }

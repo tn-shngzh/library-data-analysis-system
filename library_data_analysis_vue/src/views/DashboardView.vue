@@ -13,7 +13,9 @@ import ReaderView from './ReaderView.vue'
 import TrendView from './TrendView.vue'
 import BookView from './BookView.vue'
 import PredictView from './PredictView.vue'
+import AnalysisView from './AnalysisView.vue'
 import ReportView from './ReportView.vue'
+import ImportView from './ImportView.vue'
 import SettingsView from './SettingsView.vue'
 
 const { t } = useI18n()
@@ -40,7 +42,9 @@ const navItems = ref([
   { id: 'trend', i18nKey: 'nav.trend', icon: 'trending-up', pinned: false, closable: true, loaded: false },
   { id: 'book', i18nKey: 'nav.book', icon: 'book-plus', pinned: false, closable: true, loaded: false },
   { id: 'predict', i18nKey: 'nav.predict', icon: 'clock', pinned: false, closable: true, loaded: false },
-  { id: 'report', i18nKey: 'nav.report', icon: 'file-text', pinned: false, closable: true, loaded: false }
+  { id: 'analysis', i18nKey: 'nav.analysis', icon: 'bar-chart', pinned: false, closable: true, loaded: false },
+  { id: 'report', i18nKey: 'nav.report', icon: 'file-text', pinned: false, closable: true, loaded: false },
+  { id: 'dataImport', i18nKey: 'nav.dataImport', icon: 'upload', pinned: false, closable: true, loaded: false }
 ])
 
 const visibleItems = computed(() => navItems.value)
@@ -403,8 +407,14 @@ const toggleSidebar = () => {
             <div v-else-if="activeNavId === 'predict'" key="predict" class="tab-panel">
               <PredictView :all-data="store" />
             </div>
+            <div v-else-if="activeNavId === 'analysis'" key="analysis" class="tab-panel">
+              <AnalysisView :all-data="store" />
+            </div>
             <div v-else-if="activeNavId === 'report'" key="report" class="tab-panel">
               <ReportView :all-data="store" />
+            </div>
+            <div v-else-if="activeNavId === 'dataImport'" key="dataImport" class="tab-panel">
+              <ImportView />
             </div>
             <div v-else-if="activeNavId === 'settings'" key="settings" class="tab-panel">
               <SettingsView :embedded="true" v-model:activeMenu="settingsActiveMenu" />
