@@ -1,10 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/utils/format'
-import { insightsApi } from '@/api/insights'
 import { useDataStore } from '@/stores/data'
-import InsightsPanel from '@/components/InsightsPanel.vue'
 
 const { t } = useI18n()
 const dataStore = useDataStore()
@@ -18,7 +16,6 @@ const props = defineProps({
   }
 })
 
-const insights = ref([])
 const loadError = ref(false)
 
 watch(() => dataStore.loaded, (loaded) => {
@@ -178,17 +175,6 @@ const yearlyTrend = computed(() => {
   const maxCount = Math.max(...reversed.map(item => item.count))
   return reversed.map(item => ({ ...item, maxCount }))
 })
-
-onMounted(() => {
-  loadInsights()
-})
-
-async function loadInsights() {
-  try {
-    const data = await insightsApi.auto(5)
-    if (data) insights.value = data
-  } catch (e) { console.error(e) }
-}
 </script>
 
 <template>
@@ -486,9 +472,6 @@ async function loadInsights() {
       </div>
     </div>
 
-    <div v-if="insights.length" class="insights-section">
-      <InsightsPanel :insights="insights" />
-    </div>
   </div>
 </template>
 
