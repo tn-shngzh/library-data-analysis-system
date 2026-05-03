@@ -415,7 +415,7 @@ async def get_recent_books():
                 SELECT c.action_date, c.action, b.degree,
                        c.bib_id, bc.name, bc.category
                 FROM circulations c
-                JOIN borrowers b ON c.borrower_id = b.id
+                JOIN borrowers b ON c.borrower_id = b.borrower_id
                 LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
                 WHERE c.action = 'CKO'
                 ORDER BY c.action_date DESC, c.action_time DESC

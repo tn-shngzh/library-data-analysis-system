@@ -137,14 +137,22 @@ export const get = async (url: string): Promise<any> => {
   return promise
 }
 
-export const post = (url: string, body: any) => {
+export const post = async (url: string, body: any) => {
   invalidateCachePrefix('/api/')
-  return rawRequest(url, { method: 'POST', body: JSON.stringify(body) })
+  const res = await rawRequest(url, { method: 'POST', body: JSON.stringify(body) })
+  if (res.ok) {
+    return res.json()
+  }
+  throw new Error(`HTTP ${res.status}`)
 }
 
-export const postForm = (url: string, formData: FormData) => {
+export const postForm = async (url: string, formData: FormData) => {
   invalidateCachePrefix('/api/')
-  return rawRequest(url, { method: 'POST', body: formData })
+  const res = await rawRequest(url, { method: 'POST', body: formData })
+  if (res.ok) {
+    return res.json()
+  }
+  throw new Error(`HTTP ${res.status}`)
 }
 
 export const invalidateCachePrefix = (prefix: string) => {
