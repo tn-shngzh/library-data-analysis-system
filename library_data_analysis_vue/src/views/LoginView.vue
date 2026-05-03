@@ -18,9 +18,8 @@ const rememberMe = ref(false)
 
 const fetchCaptcha = async () => {
   try {
-    const response = await authApi.getCaptcha()
-    if (response.ok) {
-      const data = await response.json()
+    const data = await authApi.getCaptcha()
+    if (data && data.key) {
       captchaKey.value = data.key
       captchaUrl.value = data.image
       error.value = ''
@@ -60,16 +59,14 @@ const handleLogin = async () => {
   try {
     console.log('[Login] Attempting login for:', username.value)
     
-    const response = await authApi.login(
+    const data = await authApi.login(
       username.value,
       password.value,
       captcha.value,
       captchaKey.value
     )
 
-    if (response.ok) {
-      const data = await response.json()
-      
+    if (data && data.access_token) {
       console.log('[Login] Login successful, role:', data.role, 'system:', data.system)
       
       localStorage.setItem('token', data.access_token)
@@ -88,8 +85,7 @@ const handleLogin = async () => {
         router.push('/dashboard')
       }
     } else {
-      const errData = await response.json()
-      error.value = errData.detail || t('login.loginFailed')
+      error.value = (data && data.detail) || t('login.loginFailed')
       console.warn('[Login] Login failed:', error.value)
       captcha.value = ''
       fetchCaptcha()
