@@ -13,5 +13,13 @@ export default {
   type: 'タイプ',
   borrowCount: '貸出回数',
   month: '月',
-  activeCount: 'アクティブ数'
+  activeCount: 'アクティブ数',
+  distribution: '利用者分布',
+  typeTab: 'タイプ分布',
+  degreeTab: '学位分布',
+  degreeHourHeatmap: '学位別活動時間ヒートマップ',
+  frequencyDistribution: '貸出頻度分布',
+  personCount: '人数',
+  totalReadersLabel: '総利用者',
+  avgBorrowsLabel: '平均貸出'
 }

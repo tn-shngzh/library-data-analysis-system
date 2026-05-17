@@ -1,5 +1,5 @@
 export default {
-  title: '读者管理',
+  title: '读者分析',
   desc: '读者数据统计与分析',
   totalReaders: '总读者数',
   monthActive: '月活跃',
@@ -13,5 +13,13 @@ export default {
   type: '类型',
   borrowCount: '借阅次数',
   month: '月份',
-  activeCount: '活跃人数'
+  activeCount: '活跃人数',
+  distribution: '读者分布',
+  typeTab: '类型分布',
+  degreeTab: '学历分布',
+  degreeHourHeatmap: '学历活跃时段热力图',
+  frequencyDistribution: '借阅频次分布',
+  personCount: '人数',
+  totalReadersLabel: '总读者',
+  avgBorrowsLabel: '平均借阅'
 }

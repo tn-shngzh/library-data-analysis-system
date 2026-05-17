@@ -11,11 +11,12 @@ import trend from './trend'
 import predict from './predict'
 import analysis from './analysis'
 import report from './report'
-import imports from './import'
+import dataImport from './import'
 import insights from './insights'
+import intelligence from './intelligence'
 import settings from './settings'
 import login from './login'
 import register from './register'
-import library from './library'
+import stats from './stats'
 
-export default { nav, common, overview, months, degree, reader, book, borrow, category, trend, predict, analysis, report, imports, insights, settings, login, register, library }
+export default { nav, common, overview, months, degree, reader, book, borrow, category, trend, predict, analysis, report, dataImport, insights, intelligence, settings, login, register, stats }

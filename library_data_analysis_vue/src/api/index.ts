@@ -1,7 +1,7 @@
 import router from '../router'
 
 const BASE_URL = ''
-const TIMEOUT = 15000
+const TIMEOUT = 60000
 const MAX_RETRIES = 2
 
 interface CacheEntry {
@@ -25,6 +25,8 @@ const PATH_TTL_CONFIG: Record<string, { staleTime: number; maxAge: number }> = {
   '/api/borrows/daily-trend': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
   '/api/readers/monthly-trend': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
   '/api/readers/top': { staleTime: 5 * 60 * 1000, maxAge: 10 * 60 * 1000 },
+  '/api/overview/reader-activity-heatmap': { staleTime: 10 * 1000, maxAge: 60 * 1000 },
+  '/api/stats/': { staleTime: 5 * 60 * 1000, maxAge: 30 * 60 * 1000 },
 }
 
 function getTTLConfig(url: string) {
@@ -122,7 +124,10 @@ export const get = async (url: string): Promise<any> => {
     return pendingRequests.get(url)!
   }
 
+  const startTime = Date.now()
   const promise = rawRequest(url).then(async (res) => {
+    const responseTime = Date.now() - startTime
+    console.log(`[API] ${url} | ${res.status} | ${responseTime}ms`)
     if (res.ok) {
       const data = await res.json()
       swrCache.set(url, { data, timestamp: Date.now(), staleTime: config.staleTime, maxAge: config.maxAge })
@@ -143,7 +148,13 @@ export const post = async (url: string, body: any) => {
   if (res.ok) {
     return res.json()
   }
-  throw new Error(`HTTP ${res.status}`)
+  try {
+    const err = await res.json()
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  } catch (e) {
+    if (e instanceof Error && e.message !== `HTTP ${res.status}`) throw e
+    throw new Error(`HTTP ${res.status}`)
+  }
 }
 
 export const postForm = async (url: string, formData: FormData) => {
@@ -152,7 +163,13 @@ export const postForm = async (url: string, formData: FormData) => {
   if (res.ok) {
     return res.json()
   }
-  throw new Error(`HTTP ${res.status}`)
+  try {
+    const err = await res.json()
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  } catch (e) {
+    if (e instanceof Error && e.message !== `HTTP ${res.status}`) throw e
+    throw new Error(`HTTP ${res.status}`)
+  }
 }
 
 export const invalidateCachePrefix = (prefix: string) => {

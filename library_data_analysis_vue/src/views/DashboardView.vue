@@ -7,16 +7,18 @@ import { useTime } from '@/composables/useTime'
 import { useDropdown } from '@/composables/useDropdown'
 import { getCache, setCache } from '@/utils/cache'
 import OverviewView from './OverviewView.vue'
+import HistoricalAnalysisView from './HistoricalAnalysisView.vue'
 import CategoryView from './CategoryView.vue'
-import BorrowView from './BorrowView.vue'
-import ReaderView from './ReaderView.vue'
+import CirculationView from './CirculationView.vue'
 import TrendView from './TrendView.vue'
 import BookView from './BookView.vue'
 import PredictView from './PredictView.vue'
+import IntelligenceView from './IntelligenceView.vue'
 import AnalysisView from './AnalysisView.vue'
 import ReportView from './ReportView.vue'
 import ImportView from './ImportView.vue'
 import SettingsView from './SettingsView.vue'
+import StatisticsView from './StatisticsView.vue'
 
 const { t } = useI18n()
 const store = useDataStore()
@@ -36,16 +38,24 @@ const dragState = reactive({ dragging: false, dragIndex: -1, dropIndex: -1 })
 
 const navItems = ref([
   { id: 'overview', i18nKey: 'nav.overview', icon: 'grid', pinned: true, closable: false, loaded: false },
-  { id: 'category', i18nKey: 'nav.category', icon: 'book', pinned: false, closable: true, loaded: false },
-  { id: 'borrow', i18nKey: 'nav.borrow', icon: 'book-open', pinned: false, closable: true, loaded: false },
-  { id: 'reader', i18nKey: 'nav.reader', icon: 'users', pinned: false, closable: true, loaded: false },
-  { id: 'trend', i18nKey: 'nav.trend', icon: 'trending-up', pinned: false, closable: true, loaded: false },
-  { id: 'book', i18nKey: 'nav.book', icon: 'book-plus', pinned: false, closable: true, loaded: false },
-  { id: 'predict', i18nKey: 'nav.predict', icon: 'clock', pinned: false, closable: true, loaded: false },
-  { id: 'analysis', i18nKey: 'nav.analysis', icon: 'bar-chart', pinned: false, closable: true, loaded: false },
+  { id: 'historical', i18nKey: 'nav.historical', icon: 'history', pinned: true, closable: false, loaded: false },
+  { id: 'predict', i18nKey: 'nav.predict', icon: 'brain', pinned: true, closable: false, loaded: false },
+  { id: 'intelligence', i18nKey: 'nav.intelligence', icon: 'sparkles', pinned: true, closable: false, loaded: false },
+  { id: 'statistics', i18nKey: 'nav.statistics', icon: 'bar-chart', pinned: true, closable: false, loaded: false },
+  { id: 'borrow', i18nKey: 'nav.borrow', icon: 'book-open', pinned: true, closable: false, loaded: false },
+  { id: 'reader', i18nKey: 'nav.reader', icon: 'users', pinned: true, closable: false, loaded: false },
+  { id: 'trend', i18nKey: 'nav.trend', icon: 'trending-up', pinned: true, closable: false, loaded: false },
+  { id: 'book', i18nKey: 'nav.book', icon: 'book-closed', pinned: true, closable: false, loaded: false },
   { id: 'report', i18nKey: 'nav.report', icon: 'file-text', pinned: false, closable: true, loaded: false },
   { id: 'dataImport', i18nKey: 'nav.dataImport', icon: 'upload', pinned: false, closable: true, loaded: false }
 ])
+
+const navGroups = [
+  { id: 'overview', label: 'nav.group.overview', items: ['overview', 'historical', 'statistics'] },
+  { id: 'ai', label: 'nav.group.ai', items: ['predict', 'intelligence', 'trend'] },
+  { id: 'analysis', label: 'nav.group.analysis', items: ['borrow', 'reader', 'book'] },
+  { id: 'management', label: 'nav.group.management', items: ['report', 'dataImport'] }
+]
 
 const visibleItems = computed(() => navItems.value)
 
@@ -191,17 +201,22 @@ const onDragEnd = (e) => {
 const getNavIcon = (icon) => {
   const icons = {
     grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
     'book-open': '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
     users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     'trending-up': '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
-    'book-plus': '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="12" y1="6" x2="12" y2="12"/><line x1="9" y1="9" x2="15" y2="9"/>',
-    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-    'bar-chart': '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
-    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+    history: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    brain: '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/>',
+    'bar-chart': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+    'book-closed': '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+    sparkles: '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>'
   }
   return icons[icon] || icons.grid
+}
+
+const getNavItem = (id) => {
+  return navItems.value.find(n => n.id === id) || navItems.value[0]
 }
 
 onMounted(async () => {
@@ -340,44 +355,26 @@ const toggleSidebar = () => {
     <div class="layout">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <nav class="nav-menu">
-          <div
-            v-for="(item, index) in visibleItems"
-            :key="item.id"
-            class="nav-item"
-            :class="{
-              active: activeNavId === item.id,
-              'drag-over': dragState.dropIndex === index,
-              pinned: item.pinned
-            }"
-            draggable="true"
-            @click="switchTab(item.id)"
-            @contextmenu="showContextMenu($event, item.id)"
-            @dragstart="onDragStart($event, index)"
-            @dragover="onDragOver($event, index)"
-            @dragend="onDragEnd"
-          >
-            <div class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="getNavIcon(item.icon)"/>
-            </div>
-            <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t(item.i18nKey) }}</span>
-            <span v-if="item.pinned && sidebarCollapsed" class="pin-indicator"></span>
-            <button
-              v-if="item.closable && !item.pinned && !sidebarCollapsed"
-              class="nav-close-btn btn-icon btn-ghost"
-              @click.stop="closeTab(item.id)"
-              :title="t('common.close')"
+          <template v-for="group in navGroups" :key="group.id">
+            <div class="nav-group-title" v-if="!sidebarCollapsed">{{ t(group.label) }}</div>
+            <div
+              v-for="(itemId, index) in group.items"
+              :key="itemId"
+              class="nav-item"
+              :class="{
+                active: activeNavId === itemId
+              }"
+              @click="switchTab(itemId)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
+              <div class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="getNavIcon(getNavItem(itemId).icon)"/>
+              </div>
+              <span class="nav-label" :class="{ hidden: sidebarCollapsed }">{{ t(getNavItem(itemId).i18nKey) }}</span>
+            </div>
+          </template>
         </nav>
         
-        <div class="sidebar-footer" :class="{ hidden: sidebarCollapsed }">
-          <div class="version-badge">v1.0.0</div>
-        </div>
-      </aside>
+        </aside>
       
       <main class="main-content" :class="{ expanded: sidebarCollapsed }">
         <div v-if="!store.loaded" class="loading-overlay">
@@ -389,14 +386,17 @@ const toggleSidebar = () => {
             <div v-if="activeNavId === 'overview'" key="overview" class="tab-panel">
               <OverviewView :all-data="store" @navigate="switchTab" />
             </div>
+            <div v-else-if="activeNavId === 'historical'" key="historical" class="tab-panel">
+              <HistoricalAnalysisView :all-data="store" />
+            </div>
             <div v-else-if="activeNavId === 'category'" key="category" class="tab-panel">
               <CategoryView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'borrow'" key="borrow" class="tab-panel">
-              <BorrowView :all-data="store" />
+              <CirculationView type="borrow" :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'reader'" key="reader" class="tab-panel">
-              <ReaderView :all-data="store" />
+              <CirculationView type="reader" :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'trend'" key="trend" class="tab-panel">
               <TrendView :all-data="store" />
@@ -406,6 +406,12 @@ const toggleSidebar = () => {
             </div>
             <div v-else-if="activeNavId === 'predict'" key="predict" class="tab-panel">
               <PredictView :all-data="store" />
+            </div>
+            <div v-else-if="activeNavId === 'intelligence'" key="intelligence" class="tab-panel">
+              <IntelligenceView :all-data="store" />
+            </div>
+            <div v-else-if="activeNavId === 'statistics'" key="statistics" class="tab-panel">
+              <StatisticsView :all-data="store" />
             </div>
             <div v-else-if="activeNavId === 'analysis'" key="analysis" class="tab-panel">
               <AnalysisView :all-data="store" />

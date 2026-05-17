@@ -13,5 +13,10 @@ export default {
   rank: '順位',
   name: '分類名',
   count: '数',
-  percent: '割合'
+  percent: '割合',
+  literature: '文学',
+  technology: '科学技術',
+  history: '歴史',
+  art: '芸術',
+  philosophy: '哲学'
 }

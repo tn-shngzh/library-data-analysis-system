@@ -2,8 +2,8 @@ export default {
   title: '数据导入',
   desc: '导入流通数据CSV文件',
   uploadTitle: '上传文件',
-  dropHint: '拖拽CSV文件到此处，或点击选择',
-  formatHint: '支持CSV格式，需包含 borrower_id, bib_id, action, action_date 列',
+  dropHint: '点击或拖拽上传CSV文件',
+  clearFile: '清除文件',
   validate: '验证数据',
   import: '导入数据',
   validating: '验证中...',
@@ -22,5 +22,10 @@ export default {
   importTime: '导入时间',
   history: '导入历史',
   validateFailed: '验证失败',
-  uploadFailed: '导入失败'
+  uploadFailed: '导入失败',
+  formatGuide: 'CSV格式说明',
+  formatRequired: '必填列',
+  formatOptional: '可选列',
+  formatStatus: 'status 支持以下值',
+  downloadSample: '下载样例CSV'
 }

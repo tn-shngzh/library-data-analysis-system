@@ -20,5 +20,25 @@ export const analysisApi = {
     if (months) params.append('months', months.toString())
     const qs = params.toString()
     return get(`/api/analysis/category-heatmap${qs ? '?' + qs : ''}`)
+  },
+  getDegreeMonthlyTrend: (year?: number) => {
+    const params = year ? `?year=${year}` : ''
+    return get(`/api/analysis/degree-monthly-trend${params}`)
+  },
+  getDailyTrend: (startDate?: number, endDate?: number) => {
+    const params = new URLSearchParams()
+    if (startDate) params.append('start_date', startDate.toString())
+    if (endDate) params.append('end_date', endDate.toString())
+    const qs = params.toString()
+    return get(`/api/analysis/daily-trend${qs ? '?' + qs : ''}`)
+  },
+  getCategoryPeriodComparison: (p1Start?: number, p1End?: number, p2Start?: number, p2End?: number) => {
+    const params = new URLSearchParams()
+    if (p1Start) params.append('period1_start', p1Start.toString())
+    if (p1End) params.append('period1_end', p1End.toString())
+    if (p2Start) params.append('period2_start', p2Start.toString())
+    if (p2End) params.append('period2_end', p2End.toString())
+    const qs = params.toString()
+    return get(`/api/analysis/category-period-comparison${qs ? '?' + qs : ''}`)
   }
 }

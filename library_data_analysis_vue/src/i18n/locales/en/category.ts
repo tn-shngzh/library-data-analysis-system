@@ -13,5 +13,10 @@ export default {
   rank: 'Rank',
   name: 'Category Name',
   count: 'Count',
-  percent: 'Percentage'
+  percent: 'Percentage',
+  literature: 'Literature',
+  technology: 'Technology',
+  history: 'History',
+  art: 'Art',
+  philosophy: 'Philosophy'
 }

@@ -19,5 +19,13 @@ export default {
   percent: '佔比',
   rawData: '原始數據',
   movingAvg: '移動平均線',
-  trendLine: '趨勢線'
+  trendLine: '趨勢線',
+  borrowTrend: '借閱趨勢',
+  readerTrend: '讀者趨勢',
+  borrowDist: '借閱分布',
+  readerDist: '讀者分布',
+  actionType: '操作類型分布',
+  readerType: '讀者類型分布',
+  hotBooks: '熱門借閱 TOP10',
+  topReaders: '活躍讀者 TOP10'
 }

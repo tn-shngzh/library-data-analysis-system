@@ -18,11 +18,11 @@ defineEmits(['refresh'])
       </div>
       <div v-if="showRefresh" class="header-actions">
         <button class="refresh-btn btn btn-secondary btn-sm" @click="$emit('refresh')" :disabled="loading">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'spinning': loading }">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
-          <span>刷新</span>
+          <span>{{ loading ? '刷新中...' : '刷新' }}</span>
         </button>
         <slot name="actions" />
       </div>

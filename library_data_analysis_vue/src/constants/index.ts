@@ -1,8 +1,15 @@
 export const ACTION_MAP = {
-  'CKO': 'overview.checkout',
-  'CKI': 'overview.return',
-  'REH': 'overview.libraryRenewal',
-  'REI': 'overview.onlineRenewal'
+  'borrowed': 'overview.checkout',
+  'returned': 'overview.return',
+  'library_renewal': 'overview.libraryRenewal',
+  'online_renewal': 'overview.onlineRenewal'
+}
+
+export const ACTION_COLORS = {
+  'borrowed': '#d97706',
+  'returned': '#10b981',
+  'library_renewal': '#3b82f6',
+  'online_renewal': '#8b5cf6'
 }
 
 export const DEGREE_MAP = {

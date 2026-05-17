@@ -1,11 +1,11 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { readerApi } from '@/api/readers'
 import { formatNumber } from '@/utils/format'
-import { READER_STAT_CARDS } from '@/constants'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import ChartCard from '@/components/ChartCard.vue'
 
 const { t } = useI18n()
 
@@ -26,7 +26,12 @@ const readerStats = ref({
 const readerTypes = ref([])
 const monthlyTrend = ref([])
 const topReaders = ref([])
+const degreeStats = ref([])
+const degreeHourHeatmap = ref({ degrees: [], hours: [], data: [], max: 0 })
+const frequencyDistribution = ref({ groups: [], details: {} })
 const loading = ref(true)
+
+const activeTab = ref('type')
 
 const fetchReaderData = async () => {
   loading.value = true
@@ -36,6 +41,9 @@ const fetchReaderData = async () => {
     if (data.readerTypes) readerTypes.value = data.readerTypes
     if (data.monthlyTrend) monthlyTrend.value = data.monthlyTrend
     if (data.topReaders) topReaders.value = data.topReaders
+    if (data.degreeStats) degreeStats.value = data.degreeStats
+    if (data.degreeHourHeatmap) degreeHourHeatmap.value = data.degreeHourHeatmap
+    if (data.frequencyDistribution) frequencyDistribution.value = data.frequencyDistribution
   } catch (e) {
     console.error('Failed to fetch reader data', e)
   } finally {
@@ -49,6 +57,9 @@ watch(() => props.allData?.readers, (data) => {
     readerTypes.value = data.readerTypes || []
     monthlyTrend.value = data.monthlyTrend || []
     topReaders.value = data.topReaders || []
+    degreeStats.value = data.degreeStats || []
+    degreeHourHeatmap.value = data.degreeHourHeatmap || { degrees: [], hours: [], data: [], max: 0 }
+    frequencyDistribution.value = data.frequencyDistribution || { groups: [], details: {} }
     loading.value = false
   }
 }, { immediate: true })
@@ -59,7 +70,120 @@ onMounted(() => {
   }
 })
 
-const statCards = READER_STAT_CARDS
+const distributionStats = computed(() => [
+  { label: t('reader.totalReaders'), value: formatNumber(readerStats.value.total_readers) }
+])
+const frequencyStats = computed(() => [
+  { label: t('reader.monthActive'), value: formatNumber(readerStats.value.month_active) }
+])
+const heatmapStats = computed(() => [
+  { label: t('reader.monthNew'), value: formatNumber(readerStats.value.month_new) }
+])
+const topReaderStats = computed(() => [
+  { label: t('reader.avgBorrows'), value: String(readerStats.value.avg_borrows) }
+])
+
+const typePieOption = computed(() => {
+  if (!readerTypes.value.length) return {}
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0, left: 'center', textStyle: { fontSize: 11 } },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      center: ['50%', '45%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 11 },
+      emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+      data: readerTypes.value.map(t => ({ name: t.name, value: t.value }))
+    }]
+  }
+})
+
+const degreeBarOption = computed(() => {
+  if (!degreeStats.value.length) return {}
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: degreeStats.value.map(d => d.degree_name), axisLabel: { rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', name: t('reader.personCount') },
+    series: [{
+      type: 'bar',
+      data: degreeStats.value.map(d => d.count),
+      itemStyle: { borderRadius: [4, 4, 0, 0], color: '#6366f1' },
+      barWidth: '50%'
+    }]
+  }
+})
+
+const heatmapOption = computed(() => {
+  const hm = degreeHourHeatmap.value
+  if (!hm.degrees.length) return {}
+  return {
+    tooltip: { position: 'top', formatter: (p) => `${hm.degrees[p.value[1]]} ${hm.hours[p.value[0]]}: ${p.value[2]}次` },
+    grid: { left: '15%', right: '5%', top: '5%', bottom: '15%' },
+    xAxis: { type: 'category', data: hm.hours, splitArea: { show: true }, axisLabel: { fontSize: 10, interval: 1 } },
+    yAxis: { type: 'category', data: hm.degrees, splitArea: { show: true }, axisLabel: { fontSize: 11 } },
+    visualMap: {
+      min: 0,
+      max: hm.max || 1,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 0,
+      itemWidth: 12,
+      itemHeight: 80,
+      inRange: { color: ['#f0f5ff', '#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af'] }
+    },
+    series: [{
+      type: 'heatmap',
+      data: hm.data,
+      label: { show: false },
+      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
+    }]
+  }
+})
+
+const freqPieOption = computed(() => {
+  const groups = frequencyDistribution.value.groups
+  if (!groups.length) return {}
+  const colors = ['#f59e0b', '#6366f1', '#94a3b8']
+  return {
+    tooltip: { trigger: 'item', formatter: (p) => `${p.name}: ${p.value}人 (${p.percent}%)<br/>阈值: ${groups[p.dataIndex].threshold}` },
+    legend: { bottom: 0, left: 'center', textStyle: { fontSize: 11 } },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      center: ['50%', '45%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 11 },
+      data: groups.map((g, i) => ({ name: g.name, value: g.count, itemStyle: { color: colors[i] } }))
+    }]
+  }
+})
+
+const topReaderBarOption = computed(() => {
+  if (!topReaders.value.length) return {}
+  const data = topReaders.value.slice(0, 10)
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '8%', bottom: '3%', top: '3%', containLabel: true },
+    xAxis: { type: 'value', name: t('reader.borrowCount') },
+    yAxis: {
+      type: 'category',
+      data: data.map(r => String(r.id)).reverse(),
+      axisLabel: { fontSize: 11 }
+    },
+    series: [{
+      type: 'bar',
+      data: data.map(r => r.borrowed).reverse(),
+      itemStyle: { borderRadius: [0, 4, 4, 0], color: '#ef4444' },
+      barWidth: '60%'
+    }]
+  }
+})
 </script>
 
 <template>
@@ -67,124 +191,55 @@ const statCards = READER_STAT_CARDS
     <PageHeader :title="t('reader.title')" :description="t('reader.desc')" :loading="loading" @refresh="fetchReaderData" />
 
     <LoadingSpinner :loading="loading">
-      <div class="stats-grid">
-        <div v-for="card in statCards" :key="card.key" class="stat-card" :style="{ '--accent': card.accent }">
-          <div class="stat-info">
-            <span class="stat-label">{{ t(card.i18nKey) }}</span>
-            <span class="stat-value">{{ formatNumber(readerStats[card.key]) }}</span>
-          </div>
-          <div class="stat-glow"></div>
+      <div class="dashboard-row">
+        <div class="dashboard-col">
+          <ChartCard :title="t('reader.distribution')" color="var(--color-primary-500)" :delay="0.2" :stats="distributionStats">
+            <template #actions>
+              <div class="tab-switch">
+                <button class="tab-btn" :class="{ active: activeTab === 'type' }" @click="activeTab = 'type'">{{ t('reader.typeTab') }}</button>
+                <button class="tab-btn" :class="{ active: activeTab === 'degree' }" @click="activeTab = 'degree'">{{ t('reader.degreeTab') }}</button>
+              </div>
+            </template>
+            <div class="chart-container">
+              <v-chart v-if="activeTab === 'type'" class="chart" :option="typePieOption" autoresize />
+              <v-chart v-else class="chart" :option="degreeBarOption" autoresize />
+            </div>
+          </ChartCard>
+        </div>
+        <div class="dashboard-col">
+          <ChartCard :title="t('reader.frequencyDistribution')" color="var(--color-warning-500)" :delay="0.3" :stats="frequencyStats">
+            <div class="chart-container">
+              <v-chart class="chart" :option="freqPieOption" autoresize />
+            </div>
+            <div v-if="frequencyDistribution.details.total_readers" class="freq-details">
+              <div class="freq-detail-item">
+                <span class="freq-label">{{ t('reader.totalReadersLabel') }}</span>
+                <span class="freq-value">{{ frequencyDistribution.details.total_readers }}</span>
+              </div>
+              <div class="freq-detail-item">
+                <span class="freq-label">{{ t('reader.avgBorrowsLabel') }}</span>
+                <span class="freq-value">{{ frequencyDistribution.details.avg_borrows }}</span>
+              </div>
+            </div>
+          </ChartCard>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">
-            <span class="title-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-            </span>
-            {{ t('reader.typeDistribution') }}
-          </h3>
+      <div class="dashboard-row">
+        <div class="dashboard-col">
+          <ChartCard :title="t('reader.degreeHourHeatmap')" color="var(--color-success-500)" :delay="0.4" :stats="heatmapStats">
+            <div class="chart-container heatmap-container">
+              <v-chart class="chart heatmap-chart" :option="heatmapOption" autoresize />
+            </div>
+          </ChartCard>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('reader.type') }}</th>
-              <th>{{ t('borrow.count') }}</th>
-              <th>{{ t('borrow.percent') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(type, index) in readerTypes" :key="type.name" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
-              <td><span class="type-tag">{{ type.name }}</span></td>
-              <td class="count-cell">{{ formatNumber(type.count) }} <span class="unit">{{ t('common.person') }}</span></td>
-              <td>
-                <div class="percent-bar">
-                  <div class="percent-fill" :style="{ width: type.percent + '%' }"></div>
-                  <span class="percent-text">{{ type.percent }}%</span>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="readerTypes.length === 0" class="empty-row">
-              <td colspan="3">{{ t('common.noData') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">
-            <span class="title-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3v18h18"/>
-                <path d="M18 17V9"/>
-                <path d="M13 17V5"/>
-                <path d="M8 17v-3"/>
-              </svg>
-            </span>
-            {{ t('reader.monthlyTrend') }}
-          </h3>
+        <div class="dashboard-col">
+          <ChartCard :title="t('reader.topReaders')" color="var(--color-danger-500)" :delay="0.5" :stats="topReaderStats">
+            <div class="chart-container">
+              <v-chart class="chart" :option="topReaderBarOption" autoresize />
+            </div>
+          </ChartCard>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('reader.month') }}</th>
-              <th>{{ t('reader.activeCount') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in monthlyTrend" :key="item.month" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
-              <td class="name-cell">{{ item.month }}</td>
-              <td class="count-cell">{{ formatNumber(item.count) }} <span class="unit">{{ t('common.person') }}</span></td>
-            </tr>
-            <tr v-if="monthlyTrend.length === 0" class="empty-row">
-              <td colspan="2">{{ t('common.noData') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">
-            <span class="title-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="8" r="7"/>
-                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
-              </svg>
-            </span>
-            {{ t('reader.topReaders') }}
-          </h3>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('borrow.rank') }}</th>
-              <th>{{ t('reader.readerId') }}</th>
-              <th>{{ t('reader.type') }}</th>
-              <th>{{ t('reader.borrowCount') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(reader, index) in topReaders" :key="reader.id" :style="{ '--delay': index * 0.03 + 's' }" class="table-row">
-              <td>
-                <span class="rank-badge" :class="'rank-' + reader.rank">{{ reader.rank }}</span>
-              </td>
-              <td class="id-cell">{{ reader.id }}</td>
-              <td><span class="type-tag">{{ reader.type }}</span></td>
-              <td class="count-cell">{{ formatNumber(reader.borrowed) }} <span class="unit">{{ t('common.book') }}</span></td>
-            </tr>
-            <tr v-if="topReaders.length === 0" class="empty-row">
-              <td colspan="4">{{ t('common.noData') }}</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </LoadingSpinner>
   </div>
@@ -193,303 +248,108 @@ const statCards = READER_STAT_CARDS
 <style scoped>
 .readers {
   max-width: var(--main-max-width);
-}
-
-.empty-row td {
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  color: var(--color-neutral-400);
-  font-size: var(--text-sm);
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-}
-
-.stat-card {
-  background: var(--color-neutral-0);
-  border-radius: var(--radius-xl);
-  padding: var(--space-5);
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  border: 1px solid var(--color-neutral-200);
-  box-shadow: var(--shadow-sm);
-  position: relative;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height) - 48px);
   overflow: hidden;
-  transition: all var(--transition-base);
+  gap: var(--space-3);
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-neutral-300);
-  box-shadow: var(--shadow-lg);
+.dashboard-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
 }
 
-.stat-info {
+.dashboard-row :deep(.chart-card) {
+  height: 100%;
+}
+
+.dashboard-col {
+  min-width: 0;
+  min-height: 0;
+}
+
+.tab-switch {
+  display: flex;
+  gap: 4px;
+  background: var(--color-neutral-100);
+  padding: 4px;
+  border-radius: var(--radius-lg);
+}
+
+.tab-btn {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--color-neutral-500);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab-btn:hover {
+  color: var(--color-neutral-700);
+}
+
+.tab-btn.active {
+  background: var(--color-neutral-0);
+  color: var(--color-primary-600);
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-container {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.chart {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+}
+
+.freq-details {
+  display: flex;
+  gap: var(--space-6);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-neutral-100);
+}
+
+.freq-detail-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  position: relative;
-  z-index: 1;
 }
 
-.stat-label {
+.freq-label {
   font-size: var(--text-xs);
   color: var(--color-neutral-500);
-  font-weight: var(--font-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
 }
 
-.stat-value {
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  color: var(--color-neutral-900);
-  letter-spacing: var(--tracking-tight);
-}
-
-.stat-value .unit {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-neutral-500);
-}
-
-.stat-glow {
-  position: absolute;
-  top: -20px;
-  right: -20px;
-  width: 80px;
-  height: 80px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 70%);
-  border-radius: 50%;
-  transition: opacity var(--transition-base);
-}
-
-.stat-card:hover .stat-glow {
-  opacity: 1.5;
-}
-
-.card {
-  background: var(--color-neutral-0);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
-  border: 1px solid var(--color-neutral-200);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: var(--space-4);
-  transition: box-shadow var(--transition-base);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.card-header {
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-neutral-100);
-}
-
-.card-title {
+.freq-value {
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
-  color: var(--color-neutral-900);
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.title-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--gradient-primary);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  flex-shrink: 0;
-}
-
-.title-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th {
-  text-align: left;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  color: var(--color-neutral-500);
-  border-bottom: 2px solid var(--color-neutral-200);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-}
-
-.data-table td {
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--color-neutral-700);
-  border-bottom: 1px solid var(--color-neutral-100);
-  transition: background var(--transition-fast);
-}
-
-.data-table tbody tr:hover td {
-  background: var(--color-neutral-50);
-}
-
-.table-row {
-  animation: fadeIn 0.3s ease backwards;
-  animation-delay: var(--delay);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.type-tag {
-  font-size: var(--text-xs);
   color: var(--color-primary-600);
-  background: var(--color-primary-50);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  font-weight: var(--font-medium);
-  white-space: nowrap;
-}
-
-.count-cell {
-  font-weight: var(--font-semibold);
-  color: var(--color-primary-600);
-}
-
-.count-cell .unit {
-  font-weight: var(--font-medium);
-  color: var(--color-neutral-500);
-}
-
-.id-cell {
-  font-weight: var(--font-semibold);
-  color: var(--color-neutral-900);
-}
-
-.name-cell {
-  font-weight: var(--font-medium);
-  color: var(--color-neutral-700);
-}
-
-.percent-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.percent-fill {
-  height: 6px;
-  background: var(--gradient-primary);
-  border-radius: var(--radius-full);
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 4px;
-  flex: 1;
-  max-width: 120px;
-}
-
-.percent-text {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  color: var(--color-primary-500);
-  min-width: 45px;
-}
-
-.rank-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  color: #fff;
-  transition: transform var(--transition-fast);
-}
-
-.rank-badge:hover {
-  transform: scale(1.1);
-}
-
-.rank-1 {
-  background: var(--gradient-warm);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-}
-
-.rank-2 {
-  background: linear-gradient(135deg, var(--color-neutral-400), var(--color-neutral-500));
-  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3);
-}
-
-.rank-3 {
-  background: linear-gradient(135deg, var(--color-warning-600), #92400e);
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
-}
-
-.rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10 {
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-500);
 }
 
 @media (max-width: 1024px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .dashboard-row {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-3);
-  }
-
-  .card {
-    padding: var(--space-4);
-  }
-
-  .data-table th,
-  .data-table td {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--text-xs);
-  }
-}
-
-@media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .percent-bar {
+  .freq-details {
     flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-1);
-  }
-
-  .percent-fill {
-    max-width: 100%;
+    gap: var(--space-3);
   }
 }
 </style>

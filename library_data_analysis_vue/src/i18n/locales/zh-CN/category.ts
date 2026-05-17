@@ -13,5 +13,10 @@ export default {
   rank: '排名',
   name: '分类名称',
   count: '数量',
-  percent: '占比'
+  percent: '占比',
+  literature: '文学',
+  technology: '科技',
+  history: '历史',
+  art: '艺术',
+  philosophy: '哲学'
 }

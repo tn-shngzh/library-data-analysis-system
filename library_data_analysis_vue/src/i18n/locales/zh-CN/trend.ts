@@ -19,5 +19,13 @@ export default {
   percent: '占比',
   rawData: '原始数据',
   movingAvg: '移动平均线',
-  trendLine: '趋势线'
+  trendLine: '趋势线',
+  borrowTrend: '借阅趋势',
+  readerTrend: '读者趋势',
+  borrowDist: '借阅分布',
+  readerDist: '读者分布',
+  actionType: '操作类型分布',
+  readerType: '读者类型分布',
+  hotBooks: '热门借阅 TOP10',
+  topReaders: '活跃读者 TOP10'
 }

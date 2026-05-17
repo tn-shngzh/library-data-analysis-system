@@ -38,5 +38,6 @@ export default {
   total: '合计',
   found: '条结果',
   confirm: '确认',
-  noData: '暂无数据'
+  noData: '暂无数据',
+  reset: '重置'
 }

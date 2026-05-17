@@ -15,6 +15,7 @@ const validationResult = ref(null)
 const uploadResult = ref(null)
 const importHistory = ref([])
 const historyLoading = ref(false)
+const showFormatTip = ref(false)
 
 const onFileSelect = (e) => {
   const input = e.target
@@ -45,7 +46,7 @@ const validateFile = async () => {
     const data = await importsApi.validate(selectedFile.value)
     validationResult.value = data
   } catch (e) {
-    validationResult.value = { valid: false, error: e.message || t('import.validateFailed') }
+    validationResult.value = { valid: false, error: e.message || t('dataImport.validateFailed') }
   } finally {
     validating.value = false
   }
@@ -60,7 +61,7 @@ const uploadFile = async () => {
     uploadResult.value = data
     fetchHistory()
   } catch (e) {
-    uploadResult.value = { success: false, error: e.message || t('import.uploadFailed') }
+    uploadResult.value = { success: false, error: e.message || t('dataImport.uploadFailed') }
   } finally {
     uploading.value = false
   }
@@ -83,6 +84,40 @@ const formatTime = (t) => {
   return new Date(t).toLocaleString('zh-CN')
 }
 
+const clearFile = () => {
+  selectedFile.value = null
+  validationResult.value = null
+  uploadResult.value = null
+  const input = document.querySelector('.file-input')
+  if (input) input.value = ''
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+const downloadSample = () => {
+  const header = 'borrower_id,bib_id,status,borrow_date'
+  const rows = [
+    '1,107163,borrowed,20220730',
+    '248,163687,returned,20220406',
+    '516,327877,borrowed,20230310',
+    '1024,406259,returned,20230107',
+  ]
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'sample_import.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
   fetchHistory()
 })
@@ -90,7 +125,7 @@ onMounted(() => {
 
 <template>
   <div class="import-view">
-    <PageHeader :title="t('import.title')" :description="t('import.desc')" />
+    <PageHeader :title="t('dataImport.title')" :description="t('dataImport.desc')" />
 
     <div class="card">
       <div class="card-header">
@@ -102,58 +137,119 @@ onMounted(() => {
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
           </span>
-          {{ t('import.uploadTitle') }}
+          {{ t('dataImport.uploadTitle') }}
         </h3>
+        <div class="format-tip-wrapper" @mouseenter="showFormatTip = true" @mouseleave="showFormatTip = false">
+          <span class="format-tip-trigger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            {{ t('dataImport.formatGuide') }}
+          </span>
+          <Transition name="tip">
+            <div v-if="showFormatTip" class="format-tip-card">
+              <div class="tip-section">
+                <div class="tip-label">{{ t('dataImport.formatRequired') }}</div>
+                <div class="tip-tags">
+                  <span class="tip-tag">borrower_id <small>整数</small></span>
+                  <span class="tip-tag">bib_id <small>整数</small></span>
+                  <span class="tip-tag">status <small>文本</small></span>
+                  <span class="tip-tag">borrow_date <small>YYYYMMDD</small></span>
+                </div>
+              </div>
+              <div class="tip-section">
+                <div class="tip-label">{{ t('dataImport.formatStatus') }}</div>
+                <div class="tip-tags">
+                  <span class="tip-tag ok">borrowed</span>
+                  <span class="tip-tag ok">returned</span>
+                  <span class="tip-tag map">CKO → borrowed</span>
+                  <span class="tip-tag map">CKI → returned</span>
+                </div>
+              </div>
+              <div class="tip-example">
+                <code>borrower_id,bib_id,status,borrow_date</code><br/>
+                <code>1,107163,borrowed,20220730</code>
+              </div>
+              <button class="tip-download" @click="downloadSample">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                {{ t('dataImport.downloadSample') }}
+              </button>
+            </div>
+          </Transition>
+        </div>
       </div>
 
-      <div class="upload-zone" :class="{ dragging: isDragging }" @drop.prevent="onDrop" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @click="($refs.fileInput).click()">
+      <div class="upload-zone" :class="{ dragging: isDragging }" @drop.prevent="onDrop" @dragover.prevent="onDragOver" @dragleave="onDragLeave">
         <input ref="fileInput" type="file" accept=".csv" class="file-input" @change="onFileSelect" />
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="upload-icon">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-        <div class="upload-text">{{ selectedFile ? selectedFile.name : t('import.dropHint') }}</div>
-        <div class="upload-sub">{{ t('import.formatHint') }}</div>
+        <div v-if="!selectedFile" @click="($refs.fileInput).click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="upload-icon">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <div class="upload-text">{{ t('dataImport.dropHint') }}</div>
+        </div>
+        <div v-else class="file-info" @click.stop>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="file-icon">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <div class="file-details">
+            <div class="file-name">{{ selectedFile.name }}</div>
+            <div class="file-size">{{ formatFileSize(selectedFile.size) }}</div>
+          </div>
+          <button class="btn-clear" @click.stop="clearFile" :title="t('dataImport.clearFile')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="upload-actions">
         <button class="btn btn-secondary" :disabled="!selectedFile || validating" @click="validateFile">
           <span v-if="validating" class="spinner"></span>
-          {{ validating ? t('import.validating') : t('import.validate') }}
+          {{ validating ? t('dataImport.validating') : t('dataImport.validate') }}
         </button>
         <button class="btn btn-primary" :disabled="!selectedFile || uploading" @click="uploadFile">
           <span v-if="uploading" class="spinner"></span>
-          {{ uploading ? t('import.importing') : t('import.import') }}
+          {{ uploading ? t('dataImport.importing') : t('dataImport.import') }}
         </button>
       </div>
 
       <div v-if="validationResult" class="result-section" :class="{ 'result-success': validationResult.valid, 'result-error': !validationResult.valid }">
-        <div class="result-header">{{ t('import.validateResult') }}</div>
+        <div class="result-header">{{ t('dataImport.validateResult') }}</div>
         <div class="result-stats">
-          <span>{{ t('import.totalRows') }}: <strong>{{ validationResult.total_rows }}</strong></span>
-          <span>{{ t('import.validRows') }}: <strong>{{ validationResult.valid_rows }}</strong></span>
-          <span v-if="validationResult.errors">{{ t('import.errorRows') }}: <strong>{{ validationResult.errors.length }}</strong></span>
+          <span>{{ t('dataImport.totalRows') }}: <strong>{{ validationResult.total_rows }}</strong></span>
+          <span>{{ t('dataImport.validRows') }}: <strong>{{ validationResult.valid_rows }}</strong></span>
+          <span v-if="validationResult.errors">{{ t('dataImport.errorRows') }}: <strong>{{ validationResult.errors.length }}</strong></span>
         </div>
         <div v-if="validationResult.errors && validationResult.errors.length" class="error-list">
           <div v-for="err in validationResult.errors.slice(0, 10)" :key="err.row" class="error-item">
-            {{ t('import.row') }} {{ err.row }}: {{ err.message }}
+            {{ t('dataImport.row') }} {{ err.row }}: {{ err.message }}
           </div>
           <div v-if="validationResult.errors.length > 10" class="error-more">
-            {{ t('import.moreErrors', { count: validationResult.errors.length - 10 }) }}
+            {{ t('dataImport.moreErrors', { count: validationResult.errors.length - 10 }) }}
           </div>
         </div>
       </div>
 
       <div v-if="uploadResult" class="result-section" :class="{ 'result-success': uploadResult.success, 'result-error': !uploadResult.success }">
-        <div class="result-header">{{ t('import.importResult') }}</div>
+        <div class="result-header">{{ t('dataImport.importResult') }}</div>
         <div v-if="uploadResult.success" class="result-stats">
-          <span>{{ t('import.imported') }}: <strong>{{ formatNumber(uploadResult.imported) }}</strong></span>
-          <span>{{ t('import.skipped') }}: <strong>{{ uploadResult.skipped }}</strong></span>
-          <span v-if="uploadResult.errors && uploadResult.errors.length">{{ t('import.errorRows') }}: <strong>{{ uploadResult.errors.length }}</strong></span>
+          <span>{{ t('dataImport.imported') }}: <strong>{{ formatNumber(uploadResult.imported) }}</strong></span>
+          <span>{{ t('dataImport.skipped') }}: <strong>{{ uploadResult.skipped }}</strong></span>
+          <span v-if="uploadResult.errors && uploadResult.errors.length">{{ t('dataImport.errorRows') }}: <strong>{{ uploadResult.errors.length }}</strong></span>
         </div>
         <div v-else class="result-stats">
-          <span>{{ uploadResult.error || t('import.uploadFailed') }}</span>
+          <span>{{ uploadResult.error || t('dataImport.uploadFailed') }}</span>
         </div>
       </div>
     </div>
@@ -167,18 +263,18 @@ onMounted(() => {
               <polyline points="12 6 12 12 16 14"/>
             </svg>
           </span>
-          {{ t('import.history') }}
+          {{ t('dataImport.history') }}
         </h3>
       </div>
       <div v-if="historyLoading" class="loading-text">{{ t('common.loading') }}</div>
       <table v-else class="data-table">
         <thead>
           <tr>
-            <th>{{ t('import.filename') }}</th>
-            <th>{{ t('import.imported') }}</th>
-            <th>{{ t('import.skipped') }}</th>
-            <th>{{ t('import.errorCount') }}</th>
-            <th>{{ t('import.importTime') }}</th>
+            <th>{{ t('dataImport.filename') }}</th>
+            <th>{{ t('dataImport.imported') }}</th>
+            <th>{{ t('dataImport.skipped') }}</th>
+            <th>{{ t('dataImport.errorCount') }}</th>
+            <th>{{ t('dataImport.importTime') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -202,16 +298,42 @@ onMounted(() => {
 .import-view { padding: 0; }
 
 .card { background: var(--color-bg-primary, #fff); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.card-header { display: flex; align-items: center; margin-bottom: 16px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .card-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: var(--color-text-primary, #1e293b); margin: 0; }
 .title-icon { display: flex; align-items: center; width: 20px; height: 20px; color: var(--chart-primary, #3b82f6); }
 
-.upload-zone { border: 2px dashed var(--color-border, #e2e8f0); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--color-bg-secondary, #f8fafc); }
+.format-tip-wrapper { position: relative; }
+.format-tip-trigger { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--color-text-secondary, #64748b); cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: all 0.2s; }
+.format-tip-trigger:hover { background: var(--color-bg-secondary, #f1f5f9); color: var(--chart-primary, #3b82f6); }
+.format-tip-card { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e2e8f0); border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 100; }
+.tip-enter-active { transition: all 0.15s ease-out; }
+.tip-leave-active { transition: all 0.1s ease-in; }
+.tip-enter-from, .tip-leave-to { opacity: 0; transform: translateY(-4px); }
+.tip-section { margin-bottom: 10px; }
+.tip-label { font-size: 12px; font-weight: 600; color: var(--color-text-secondary, #64748b); margin-bottom: 6px; }
+.tip-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tip-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: 'Consolas', 'Monaco', monospace; background: var(--color-bg-secondary, #f8fafc); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text-primary, #1e293b); }
+.tip-tag small { font-size: 10px; color: var(--color-text-tertiary, #94a3b8); }
+.tip-tag.ok { border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.04); }
+.tip-tag.map { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.04); }
+.tip-example { background: var(--color-bg-secondary, #f8fafc); border-radius: 6px; padding: 8px 12px; font-size: 12px; line-height: 1.7; margin-bottom: 10px; }
+.tip-example code { font-family: 'Consolas', 'Monaco', monospace; color: var(--color-text-secondary, #475569); }
+.tip-download { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; background: var(--color-bg-primary, #fff); font-size: 12px; color: var(--chart-primary, #3b82f6); cursor: pointer; transition: all 0.2s; }
+.tip-download:hover { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.3); }
+
+.upload-zone { border: 2px dashed var(--color-border, #e2e8f0); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--color-bg-secondary, #f8fafc); min-height: 120px; display: flex; align-items: center; justify-content: center; }
 .upload-zone:hover, .upload-zone.dragging { border-color: var(--chart-primary, #3b82f6); background: rgba(59,130,246,0.04); }
 .file-input { display: none; }
 .upload-icon { width: 48px; height: 48px; color: var(--color-text-tertiary, #94a3b8); margin-bottom: 12px; }
 .upload-text { font-size: 15px; color: var(--color-text-primary, #1e293b); font-weight: 500; margin-bottom: 4px; }
-.upload-sub { font-size: 12px; color: var(--color-text-tertiary, #94a3b8); }
+
+.file-info { display: flex; align-items: center; gap: 12px; width: 100%; padding: 0 16px; }
+.file-icon { width: 40px; height: 40px; color: var(--chart-primary, #3b82f6); flex-shrink: 0; }
+.file-details { flex: 1; text-align: left; min-width: 0; }
+.file-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-size { font-size: 12px; color: var(--color-text-tertiary, #94a3b8); margin-top: 2px; }
+.btn-clear { width: 28px; height: 28px; border: none; border-radius: 50%; background: var(--color-bg-secondary, #f1f5f9); color: var(--color-text-secondary, #64748b); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.btn-clear:hover { background: rgba(239,68,68,0.1); color: var(--chart-danger, #ef4444); }
 
 .upload-actions { display: flex; gap: 12px; margin-top: 16px; }
 .btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }

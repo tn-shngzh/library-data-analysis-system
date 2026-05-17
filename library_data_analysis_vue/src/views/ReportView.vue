@@ -1,153 +1,72 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { reportApi } from '@/api/reports'
 
 const { t } = useI18n()
 
-const props = defineProps({
-  allData: {
-    type: Object,
-    default: null
-  }
-})
-
 const loading = ref(false)
 const activeReport = ref('overview')
-const reportPeriod = ref('month')
-const generating = ref(false)
-const generatedReport = ref(null)
-
-const formatNumber = (num) => {
-  if (!num && num !== 0) return '0'
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
-
-const overviewStats = computed(() => props.allData?.overview?.stats || {})
-const readerStats = computed(() => props.allData?.readers?.stats || {})
-const bookStats = computed(() => props.allData?.books?.stats || {})
-const borrowStats = computed(() => props.allData?.borrows?.stats || {})
+const llmStatus = ref({ status: 'checking' })
+const aiGenerating = ref(false)
+const aiReport = ref(null)
+const aiReportError = ref(null)
+const aiReportData = ref(null)
 
 const reportTypes = [
-  { id: 'overview', i18nKey: 'report.typeOverview', icon: 'layout', i18nDesc: 'report.typeOverviewDesc' },
-  { id: 'reader', i18nKey: 'report.typeReader', icon: 'users', i18nDesc: 'report.typeReaderDesc' },
-  { id: 'book', i18nKey: 'report.typeBook', icon: 'book', i18nDesc: 'report.typeBookDesc' },
-  { id: 'borrow', i18nKey: 'report.typeBorrow', icon: 'activity', i18nDesc: 'report.typeBorrowDesc' }
+  { id: 'overview', i18nKey: 'report.typeOverview', icon: 'layout' },
+  { id: 'reader', i18nKey: 'report.typeReader', icon: 'users' },
+  { id: 'book', i18nKey: 'report.typeBook', icon: 'book' },
+  { id: 'borrow', i18nKey: 'report.typeBorrow', icon: 'activity' }
 ]
 
-const generateReport = () => {
-  generating.value = true
-  setTimeout(() => {
-    const s = overviewStats.value
-    const rs = readerStats.value
-    const bs = bookStats.value
-    const bws = borrowStats.value
-
-    generatedReport.value = {
-      title: activeReport.value === 'overview' ? t('report.comprehensiveReport') :
-             activeReport.value === 'reader' ? t('report.readerReport') :
-             activeReport.value === 'book' ? t('report.bookReport') : t('report.borrowReport'),
-      date: new Date().toLocaleDateString('zh-CN'),
-      period: reportPeriod.value === 'month' ? t('report.monthly') : reportPeriod.value === 'quarter' ? t('report.quarterly') : t('report.yearly'),
-      sections: activeReport.value === 'overview' ? [
-        {
-          title: t('report.coreIndicators'),
-          items: [
-            { label: t('report.totalCirculation'), value: formatNumber(s.total_borrows || 0) },
-            { label: t('report.registeredReaders'), value: formatNumber(s.total_readers || 0) },
-            { label: t('report.activeReaders'), value: formatNumber(s.active_readers || 0) },
-            { label: t('report.collectionBooks'), value: formatNumber(s.total_books || 0) }
-          ]
-        },
-        {
-          title: t('report.borrowStatistics'),
-          items: [
-            { label: t('report.checkoutCount'), value: formatNumber(s.cko_count || 0) },
-            { label: t('report.checkinCount'), value: formatNumber(s.cki_count || 0) },
-            { label: t('report.onSiteRenewal'), value: formatNumber(s.reh_count || 0) },
-            { label: t('report.onlineRenewal'), value: formatNumber(s.rei_count || 0) }
-          ]
-        }
-      ] : activeReport.value === 'reader' ? [
-        {
-          title: t('report.readerOverview'),
-          items: [
-            { label: t('report.totalReaders'), value: formatNumber(rs.total_readers || 0) },
-            { label: t('report.monthlyActive'), value: formatNumber(rs.month_active || 0) },
-            { label: t('report.monthlyNew'), value: formatNumber(rs.month_new || 0) },
-            { label: t('report.avgBorrows'), value: (rs.avg_borrows || 0) + ' ' + t('common.times') }
-          ]
-        }
-      ] : activeReport.value === 'book' ? [
-        {
-          title: t('report.bookOverview'),
-          items: [
-            { label: t('report.totalCollection'), value: formatNumber(bs.total_items || 0) },
-            { label: t('report.monthlyNew'), value: formatNumber(bs.month_items || 0) },
-            { label: t('report.borrowRate'), value: (bs.borrow_rate || 0) + '%' },
-            { label: t('report.zeroBorrow'), value: formatNumber(bs.zero_borrow || 0) }
-          ]
-        }
-      ] : [
-        {
-          title: t('report.borrowOverview'),
-          items: [
-            { label: t('report.totalActions'), value: formatNumber(bws.total_actions || 0) },
-            { label: t('report.totalCheckouts'), value: formatNumber(bws.total_borrows || 0) },
-            { label: t('report.totalReturns'), value: formatNumber(bws.total_returns || 0) },
-            { label: t('report.totalRenewals'), value: formatNumber(bws.total_renewals || 0) }
-          ]
-        }
-      ]
-    }
-    generating.value = false
-  }, 800)
-}
-
-const exportReport = (format) => {
-  if (!generatedReport.value) return
-  const report = generatedReport.value
-  let content = `${report.title}\n`
-  content += `${t('report.reportDate')}: ${report.date}\n`
-  content += `${t('report.statisticsPeriod')}: ${report.period}\n\n`
-  report.sections.forEach(section => {
-    content += `【${section.title}】\n`
-    section.items.forEach(item => {
-      content += `  ${item.label}: ${item.value}\n`
-    })
-    content += '\n'
-  })
-
-  if (format === 'txt') {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${report.title}_${report.date}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  } else if (format === 'csv') {
-    let csv = `${t('report.csvCategory')},${t('report.csvMetric')},${t('report.csvValue')}\n`
-    report.sections.forEach(section => {
-      section.items.forEach(item => {
-        csv += `${section.title},${item.label},${item.value}\n`
-      })
-    })
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${report.title}_${report.date}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+const checkLlmStatus = async () => {
+  try {
+    llmStatus.value = await reportApi.checkStatus()
+  } catch {
+    llmStatus.value = { status: 'offline', detail: t('report.llmCheckFailed') }
   }
 }
 
-watch(() => props.allData, (data) => {
-  if (data) loading.value = false
-}, { immediate: true, deep: true })
+const generateAiReport = async () => {
+  if (llmStatus.value.status !== 'online') {
+    aiReportError.value = t('report.llmNotStarted')
+    return
+  }
 
-onMounted(() => {
-  if (props.allData) loading.value = false
+  aiGenerating.value = true
+  aiReportError.value = null
+  aiReport.value = null
+  
+  try {
+    const generateFuncs = {
+      overview: reportApi.generateOverview,
+      reader: reportApi.generateReader,
+      book: reportApi.generateBook,
+      borrow: reportApi.generateBorrow
+    }
+    const result = await generateFuncs[activeReport.value]()
+    aiReport.value = result.content
+    aiReportData.value = result.data
+  } catch (e) {
+    aiReportError.value = e.message || '生成失败，请检查 LLM 服务状态'
+  } finally {
+    aiGenerating.value = false
+  }
+}
+
+const exportExcel = () => {
+  reportApi.exportExcel(activeReport.value)
+}
+
+const exportWord = () => {
+  if (aiReport.value) {
+    reportApi.exportWord(activeReport.value, aiReport.value)
+  }
+}
+
+onMounted(async () => {
+  await checkLlmStatus()
 })
 </script>
 
@@ -160,300 +79,368 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <span>{{ t('common.loading') }}</span>
-    </div>
-
-    <template v-else>
-      <div class="report-config">
-        <div class="config-section">
-          <h3>{{ t('report.selectReportType') }}</h3>
-          <div class="report-types">
-            <div
-              v-for="rt in reportTypes"
-              :key="rt.id"
-              class="report-type-card"
-              :class="{ active: activeReport === rt.id }"
-              @click="activeReport = rt.id"
-            >
-              <div class="rt-icon">
-                <svg v-if="rt.icon === 'layout'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="7" height="7"/>
-                  <rect x="14" y="3" width="7" height="7"/>
-                  <rect x="14" y="14" width="7" height="7"/>
-                  <rect x="3" y="14" width="7" height="7"/>
-                </svg>
-                <svg v-else-if="rt.icon === 'users'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                <svg v-else-if="rt.icon === 'book'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                </svg>
-              </div>
-              <div class="rt-info">
-                <span class="rt-label">{{ t(rt.i18nKey) }}</span>
-                <span class="rt-desc">{{ t(rt.i18nDesc) }}</span>
-              </div>
-              <div class="rt-check" v-if="activeReport === rt.id">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              </div>
+    <div class="report-config">
+      <div class="config-section">
+        <h3>{{ t('report.selectReportType') }}</h3>
+        <div class="report-types">
+          <div
+            v-for="rt in reportTypes"
+            :key="rt.id"
+            class="report-type-card"
+            :class="{ active: activeReport === rt.id }"
+            @click="activeReport = rt.id"
+          >
+            <div class="rt-icon">
+              <svg v-if="rt.icon === 'layout'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              <svg v-else-if="rt.icon === 'users'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <svg v-else-if="rt.icon === 'book'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div class="rt-info">
+              <span class="rt-label">{{ t(rt.i18nKey) }}</span>
+            </div>
+            <div class="rt-check" v-if="activeReport === rt.id">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="config-section">
-          <h3>{{ t('report.statisticsPeriod') }}</h3>
-          <div class="period-options">
-            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'month' }" @click="reportPeriod = 'month'">{{ t('report.monthly') }}</button>
-            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'quarter' }" @click="reportPeriod = 'quarter'">{{ t('report.quarterly') }}</button>
-            <button class="period-btn btn-select" :class="{ active: reportPeriod === 'year' }" @click="reportPeriod = 'year'">{{ t('report.yearly') }}</button>
-          </div>
+      <div class="report-actions">
+        <div class="llm-status" :class="llmStatus.status">
+          <span class="status-dot"></span>
+          <span>{{ llmStatus.detail }}</span>
         </div>
-
-        <button class="generate-btn btn btn-primary btn-lg btn-block" @click="generateReport" :disabled="generating">
-          <svg v-if="!generating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
+        <button 
+          class="btn btn-primary btn-lg" 
+          @click="generateAiReport" 
+          :disabled="aiGenerating || llmStatus.status !== 'online'"
+        >
+          <svg v-if="!aiGenerating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
           </svg>
           <div v-else class="btn-spinner"></div>
-          <span>{{ generating ? t('report.generating') : t('report.generateReport') }}</span>
+          {{ aiGenerating ? t('report.generating') : t('report.generateAiReport') }}
         </button>
       </div>
+    </div>
 
-      <div v-if="generatedReport" class="report-preview">
-        <div class="preview-header">
-          <div>
-            <h2>{{ generatedReport.title }}</h2>
-            <div class="preview-meta">
-              <span>{{ t('report.reportDate') }}: {{ generatedReport.date }}</span>
-              <span>{{ t('report.statisticsPeriod') }}: {{ generatedReport.period }}</span>
-            </div>
-          </div>
-          <div class="export-actions">
-            <button class="export-btn btn btn-ghost" @click="exportReport('csv')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>{{ t('report.exportCSV') }}</span>
-            </button>
-            <button class="export-btn btn btn-ghost" @click="exportReport('txt')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>{{ t('report.exportTXT') }}</span>
-            </button>
-          </div>
-        </div>
+    <div v-if="aiReportError" class="ai-error">
+      {{ aiReportError }}
+    </div>
 
-        <div class="preview-body">
-          <div v-for="section in generatedReport.sections" :key="section.title" class="report-section">
-            <h3>{{ section.title }}</h3>
-            <div class="report-items">
-              <div v-for="item in section.items" :key="item.label" class="report-item">
-                <span class="item-label">{{ item.label }}</span>
-                <span class="item-value">{{ item.value }}</span>
-              </div>
-            </div>
-          </div>
+    <div v-if="aiReport" class="ai-report-content">
+      <div class="ai-report-header">
+        <span>{{ t('report.reportType') }}：{{ reportTypes.find(r => r.id === activeReport)?.i18nKey ? t(reportTypes.find(r => r.id === activeReport)?.i18nKey) : activeReport }}</span>
+        <div class="export-actions">
+          <button class="btn btn-ghost" @click="exportExcel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {{ t('report.exportExcel') }}
+          </button>
+          <button class="btn btn-ghost" @click="exportWord">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {{ t('report.exportWord') }}
+          </button>
         </div>
       </div>
+      <div class="ai-report-text">{{ aiReport }}</div>
+    </div>
 
-      <div v-else class="empty-report">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" width="64" height="64">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-        <h3>{{ t('report.noReportTitle') }}</h3>
-        <p>{{ t('report.noReportDesc') }}</p>
-      </div>
-    </template>
+    <div v-else-if="!aiGenerating" class="ai-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+      </svg>
+      <h3>{{ t('report.aiReportTitle') }}</h3>
+      <p>{{ t('report.aiReportDesc') }}</p>
+    </div>
+
+    <div v-if="aiGenerating" class="ai-loading">
+      <div class="loading-spinner"></div>
+      <span>{{ t('report.aiAnalyzing') }}</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .report-view {
-  max-width: 1200px;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height) - 48px);
+  overflow-y: auto;
+  gap: var(--space-4);
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .header-info h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 4px 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  margin: 0 0 var(--space-1) 0;
 }
 
 .header-info p {
-  font-size: 14px;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
   margin: 0;
 }
 
-.loading-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px;
-  color: #94a3b8;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #d97706;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .report-config {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 24px;
+  background: var(--chart-bg);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  flex-shrink: 0;
 }
 
 .config-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-4);
 }
 
 .config-section h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 14px 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  margin: 0 0 var(--space-3) 0;
 }
 
 .report-types {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .report-type-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-neutral-50);
+  border: 2px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
 }
 
 .report-type-card:hover {
-  border-color: #fcd34d;
-  background: #fffbeb;
+  border-color: var(--color-primary-400);
 }
 
 .report-type-card.active {
-  border-color: #d97706;
-  background: #fffbeb;
-  box-shadow: 0 0 0 1px #d97706;
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
 }
 
 .rt-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #d97706, #fbbf24);
+  background: var(--gradient-primary);
   color: white;
   flex-shrink: 0;
 }
 
 .rt-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .rt-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
 }
 
 .rt-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.rt-desc {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
 }
 
 .rt-check {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 22px;
-  height: 22px;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: #d97706;
+  background: var(--color-primary-500);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .rt-check svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   color: white;
 }
 
-.period-options {
+.report-actions {
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-.period-btn.active {
-  background: var(--color-primary-500);
-  color: var(--color-neutral-0);
-  border-color: var(--color-primary-500);
+.llm-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
 }
 
-.generate-btn svg {
-  width: 18px;
-  height: 18px;
+.llm-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.llm-status.online {
+  background: var(--color-success-50);
+  color: var(--color-success-600);
+}
+
+.llm-status.online .status-dot {
+  background: var(--color-success-500);
+}
+
+.llm-status.offline {
+  background: var(--color-danger-50);
+  color: var(--color-danger-600);
+}
+
+.llm-status.offline .status-dot {
+  background: var(--color-danger-500);
+}
+
+.ai-error {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-50);
+  color: var(--color-danger-600);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.ai-report-content {
+  background: var(--chart-bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.ai-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-neutral-50);
+  border-bottom: 1px solid var(--color-neutral-200);
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+}
+
+.export-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ai-report-text {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  color: var(--color-neutral-700);
+  white-space: pre-wrap;
+}
+
+.ai-empty, .ai-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16) var(--space-4);
+  background: var(--chart-bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
+  text-align: center;
+  color: var(--color-neutral-400);
+  flex: 1;
+  min-height: 0;
+}
+
+.ai-empty svg, .ai-loading svg {
+  margin-bottom: var(--space-4);
+  color: var(--color-primary-500);
+}
+
+.ai-empty h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-500);
+  margin: 0 0 var(--space-2);
+}
+
+.ai-empty p {
+  font-size: var(--text-sm);
+  color: var(--color-neutral-400);
+  margin: 0;
+  max-width: 400px;
+}
+
+.ai-loading {
+  color: var(--color-neutral-500);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-neutral-200);
+  border-top-color: var(--color-primary-500);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--space-3);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .btn-spinner {
@@ -465,149 +452,14 @@ onMounted(() => {
   animation: spin 0.6s linear infinite;
 }
 
-.report-preview {
-  background: var(--color-neutral-0);
-  border-radius: 12px;
-  border: 1px solid var(--color-neutral-200);
-  overflow: hidden;
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 24px;
-  background: var(--gradient-primary);
-  color: var(--color-neutral-0);
-}
-
-.preview-header h2 {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0 0 8px;
-}
-
-.preview-meta {
-  display: flex;
-  gap: 16px;
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.export-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.export-btn {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: var(--color-neutral-0);
-}
-
-.export-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.export-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.preview-body {
-  padding: 24px;
-}
-
-.report-section {
-  margin-bottom: 24px;
-}
-
-.report-section:last-child {
-  margin-bottom: 0;
-}
-
-.report-section h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 14px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.report-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.report-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #f1f5f9;
-}
-
-.item-label {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.item-value {
-  font-size: 15px;
-  font-weight: 700;
-  color: #d97706;
-}
-
-.empty-report {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #94a3b8;
-}
-
-.empty-report h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #64748b;
-  margin: 16px 0 4px;
-}
-
-.empty-report p {
-  font-size: 14px;
-  color: #94a3b8;
-}
-
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
   .report-types {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 768px) {
-  .preview-header {
+  .report-actions {
     flex-direction: column;
-    gap: 16px;
-  }
-
-  .export-actions {
-    width: 100%;
-  }
-
-  .export-btn {
-    flex: 1;
-    justify-content: center;
-  }
-
-  .report-items {
-    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
 </style>

@@ -1,10 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatNumber } from '@/utils/format'
-import { insightsApi } from '@/api/insights'
 import { useDataStore } from '@/stores/data'
-import InsightsPanel from '@/components/InsightsPanel.vue'
+import { LineChart, HeatmapChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent } from 'echarts/components'
+import { use } from 'echarts/core'
+import VChart from 'vue-echarts'
+
+use([LineChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent])
 
 const { t } = useI18n()
 const dataStore = useDataStore()
@@ -18,478 +21,989 @@ const props = defineProps({
   }
 })
 
-const loadError = ref(false)
-const insights = ref([])
+const s = computed(() => props.allData?.overview?.stats || {})
+const h = computed(() => props.allData?.overview?.historicalStats || {})
 
-watch(() => dataStore.loaded, (loaded) => {
-  if (loaded && !props.allData?.overview?.stats) {
-    loadError.value = true
-  }
+const formatNum = (val) => {
+  if (val === null || val === undefined || val === 0) return '-'
+  if (val >= 10000) return (val / 10000).toFixed(1) + 'w'
+  if (val >= 1000) return (val / 1000).toFixed(1) + 'k'
+  return String(val)
+}
+
+const formatPct = (val) => {
+  if (val === null || val === undefined) return '-'
+  const sign = val >= 0 ? '+' : ''
+  return `${sign}${val}%`
+}
+
+const todayInsight = computed(() => {
+  const stats = s.value
+  if (!stats?.total_borrows) return []
+
+  const dod = stats.dod_changes || {}
+
+  return [
+    {
+      key: 'visits',
+      label: t('overview.todayVisits'),
+      value: formatNum(stats.today_visits || 0),
+      change: dod.visits != null ? dod.visits : null
+    },
+    {
+      key: 'borrows',
+      label: t('overview.todayBorrows'),
+      value: formatNum(stats.today_borrows || 0),
+      change: dod.borrows != null ? dod.borrows : null
+    },
+    {
+      key: 'returns',
+      label: t('overview.todayReturns'),
+      value: formatNum(stats.today_returns || 0),
+      change: dod.returns != null ? dod.returns : null
+    }
+  ]
 })
 
-const retryLoad = async () => {
-  loadError.value = false
-  await dataStore.refreshModule('overview')
-  if (!props.allData?.overview?.stats) {
-    loadError.value = true
+const alertItems = computed(() => {
+  const stats = s.value
+  const hist = h.value
+  const health = collectionHealth.value
+  const alerts = []
+
+  if (!stats?.total_borrows) return alerts
+
+  const todayTotal = (stats.today_borrows || 0) + (stats.today_returns || 0)
+  const avgDaily = hist.avg_daily_circulations || 0
+  const todayVsAvg = avgDaily > 0 ? Math.round((todayTotal - avgDaily) / avgDaily * 100) : 0
+  const yoyBorrows = stats.yoy_changes?.total_borrows ?? null
+  const bookTurnover = hist.book_turnover_rate || 0
+  const dodVisits = stats.dod_changes?.visits ?? null
+  const dodBorrows = stats.dod_changes?.borrows ?? null
+  const dodReturns = stats.dod_changes?.returns ?? null
+  const neverBorrowed = hist.never_borrowed_books || 0
+  const totalBooks = hist.total_distinct_books || 1
+  const retentionRate = hist.reader_retention_rate || 0
+  const utilization = health.utilization || 0
+
+  if (Math.abs(todayVsAvg) >= 30) {
+    const isBelow = todayVsAvg < 0
+    alerts.push({
+      key: 'today',
+      type: 'danger',
+      text: t('overview.alertTodayAbnormal') + ' — ' +
+        (isBelow ? t('overview.alertBelowAvg', [Math.abs(todayVsAvg)]) : t('overview.alertAboveAvg', [todayVsAvg]))
+    })
+  } else if (Math.abs(todayVsAvg) >= 15) {
+    const isBelow = todayVsAvg < 0
+    alerts.push({
+      key: 'today',
+      type: 'warning',
+      text: t('overview.alertTodayAbnormal') + ' — ' +
+        (isBelow ? t('overview.alertBelowAvg', [Math.abs(todayVsAvg)]) : t('overview.alertAboveAvg', [todayVsAvg]))
+    })
   }
-}
 
-const cardNavMap = {
-  total_flow: 'borrow',
-  registered_readers: 'reader',
-  active_readers: 'reader',
-  books_in_library: 'book',
-  borrowed_books: 'borrow',
-  returned_books: 'borrow',
-  library_visits: 'borrow',
-  online_renewals: 'borrow',
-  total_categories: 'category',
-  today_borrows: 'borrow',
-  today_returns: 'borrow',
-  today_visits: 'borrow',
-  borrow_rate: 'borrow',
-  active_rate: 'reader',
-  avg_borrow: 'borrow',
-  never_borrowed: 'book'
-}
+  if (yoyBorrows !== null && yoyBorrows < -10) {
+    alerts.push({
+      key: 'yoy',
+      type: 'danger',
+      text: t('overview.alertYoyDecline', [Math.abs(yoyBorrows)])
+    })
+  } else if (yoyBorrows !== null && yoyBorrows < 0) {
+    alerts.push({
+      key: 'yoy',
+      type: 'warning',
+      text: t('overview.alertYoyDecline', [Math.abs(yoyBorrows)])
+    })
+  }
 
-const handleCardClick = (card) => {
-  const targetTab = cardNavMap[card.key]
-  if (targetTab) emit('navigate', targetTab)
-}
+  if (bookTurnover < 25 && bookTurnover > 0) {
+    alerts.push({
+      key: 'turnover',
+      type: 'danger',
+      text: t('overview.alertTurnoverLow', [bookTurnover])
+    })
+  } else if (bookTurnover < 40 && bookTurnover > 0) {
+    alerts.push({
+      key: 'turnover',
+      type: 'warning',
+      text: t('overview.alertTurnoverLow', [bookTurnover])
+    })
+  }
 
-const statsCards = computed(() => {
-  const s = props.allData?.overview?.stats
-  const h = props.allData?.overview?.historicalStats
-  if (!s) {
-    return [
-      { key: 'total_flow', label: t('overview.totalFlow'), value: '-', change: '-', changeType: 'up', icon: 'book', color: 'var(--chart-primary)' },
-      { key: 'registered_readers', label: t('overview.registeredReaders'), value: '-', change: '-', changeType: 'up', icon: 'users', color: 'var(--color-info-500)' },
-      { key: 'active_readers', label: t('overview.activeReaders'), value: '-', change: '-', changeType: 'up', icon: 'user-check', color: 'var(--chart-accent)' },
-      { key: 'books_in_library', label: t('overview.booksInLibrary'), value: '-', change: '-', changeType: 'up', icon: 'archive', color: 'var(--chart-secondary-light)' },
-      { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-up', color: 'var(--chart-primary-light)' },
-      { key: 'returned_books', label: t('overview.returnedBooks'), value: '-', change: '-', changeType: 'up', icon: 'arrow-down', color: 'var(--chart-danger)' },
-      { key: 'library_visits', label: t('overview.libraryRenewals'), value: '-', change: '-', changeType: 'up', icon: 'refresh', color: 'var(--chart-secondary)' },
-      { key: 'online_renewals', label: t('overview.onlineRenewals'), value: '-', change: '-', changeType: 'up', icon: 'wifi', color: 'var(--chart-primary)' },
-      { key: 'total_categories', label: t('overview.totalCategories'), value: '-', change: '-', changeType: 'neutral', icon: 'layers', color: 'var(--chart-accent)' },
-      { key: 'today_borrows', label: t('overview.todayBorrows'), value: '-', change: '-', changeType: 'up', icon: 'book-open', color: 'var(--chart-primary-light)' },
-      { key: 'today_returns', label: t('overview.todayReturns'), value: '-', change: '-', changeType: 'up', icon: 'book-closed', color: 'var(--chart-danger)' },
-      { key: 'today_visits', label: t('overview.todayVisits'), value: '-', change: '-', changeType: 'up', icon: 'map-pin', color: 'var(--chart-accent)' },
-      { key: 'borrow_rate', label: t('overview.borrowRate'), value: '-', rate: 0, icon: 'percent', color: 'var(--chart-primary)' },
-      { key: 'active_rate', label: t('overview.activeReaderRate'), value: '-', rate: 0, icon: 'activity', color: 'var(--color-info-500)' },
-      { key: 'avg_borrow', label: t('overview.avgBorrowPerReader'), value: '-', unit: t('overview.times'), icon: 'trending-up', color: 'var(--chart-secondary-light)' },
-      { key: 'never_borrowed', label: t('overview.neverBorrowedBooks'), value: '-', icon: 'book-off', color: 'var(--chart-danger)' }
+  if (dodVisits !== null && dodVisits <= -20) {
+    alerts.push({
+      key: 'dodVisits',
+      type: 'danger',
+      text: t('overview.alertVisitsDrop', [Math.abs(dodVisits)])
+    })
+  } else if (dodVisits !== null && dodVisits <= -10) {
+    alerts.push({
+      key: 'dodVisits',
+      type: 'warning',
+      text: t('overview.alertVisitsDrop', [Math.abs(dodVisits)])
+    })
+  }
+
+  if (dodBorrows !== null && dodBorrows <= -15) {
+    alerts.push({
+      key: 'dodBorrows',
+      type: 'danger',
+      text: t('overview.alertBorrowsDrop', [Math.abs(dodBorrows)])
+    })
+  } else if (dodBorrows !== null && dodBorrows <= -5) {
+    alerts.push({
+      key: 'dodBorrows',
+      type: 'warning',
+      text: t('overview.alertBorrowsDrop', [Math.abs(dodBorrows)])
+    })
+  }
+
+  if (dodReturns !== null && dodReturns >= 30) {
+    alerts.push({
+      key: 'dodReturns',
+      type: 'warning',
+      text: t('overview.alertReturnsSurge', [dodReturns])
+    })
+  }
+
+  const neverBorrowPct = Math.round(neverBorrowed / totalBooks * 100)
+  if (neverBorrowPct >= 50) {
+    alerts.push({
+      key: 'neverBorrowed',
+      type: 'danger',
+      text: t('overview.alertNeverBorrowed', [neverBorrowPct])
+    })
+  } else if (neverBorrowPct >= 30) {
+    alerts.push({
+      key: 'neverBorrowed',
+      type: 'warning',
+      text: t('overview.alertNeverBorrowed', [neverBorrowPct])
+    })
+  }
+
+  if (retentionRate > 0 && retentionRate < 60) {
+    alerts.push({
+      key: 'retention',
+      type: 'danger',
+      text: t('overview.alertRetentionLow', [retentionRate])
+    })
+  } else if (retentionRate > 0 && retentionRate < 75) {
+    alerts.push({
+      key: 'retention',
+      type: 'warning',
+      text: t('overview.alertRetentionLow', [retentionRate])
+    })
+  }
+
+  if (utilization > 0 && utilization < 60) {
+    alerts.push({
+      key: 'utilization',
+      type: 'danger',
+      text: t('overview.alertUtilizationLow', [utilization])
+    })
+  } else if (utilization > 0 && utilization < 75) {
+    alerts.push({
+      key: 'utilization',
+      type: 'warning',
+      text: t('overview.alertUtilizationLow', [utilization])
+    })
+  }
+
+  return alerts.slice(0, 5)
+})
+
+const trend7dOption = computed(() => {
+  const data = props.allData?.overview?.trend7d
+  if (!data || !Array.isArray(data) || data.length === 0) return null
+
+  const dates = data.map(d => {
+    const s = String(d.date)
+    return s.length === 8 ? `${s.slice(4, 6)}/${s.slice(6, 8)}` : s
+  })
+  const borrows = data.map(d => d.borrows || 0)
+  const returns = data.map(d => d.returns || 0)
+  const total = data.map(d => d.total || 0)
+  const borrowers = data.map(d => d.borrowers || 0)
+
+  return {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: 'var(--color-neutral-200)',
+      textStyle: { fontSize: 12, color: '#333' }
+    },
+    legend: {
+      data: [t('overview.trendTotal'), t('overview.trendBorrows'), t('overview.trendReturns'), t('overview.trendBorrowers')],
+      bottom: 0,
+      textStyle: { fontSize: 11, color: '#999' },
+      itemWidth: 14,
+      itemHeight: 3
+    },
+    grid: { top: 10, right: 50, bottom: 30, left: 40 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 10, color: '#9ca3af' }
+    },
+    yAxis: [
+      {
+        type: 'value',
+        splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } },
+        axisLabel: { fontSize: 10, color: '#9ca3af' }
+      },
+      {
+        type: 'value',
+        splitLine: { show: false },
+        axisLabel: { fontSize: 10, color: '#ec4899' },
+        nameTextStyle: { color: '#ec4899', fontSize: 10 }
+      }
+    ],
+    series: [
+      {
+        name: t('overview.trendTotal'),
+        type: 'line',
+        data: total,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { width: 2.5, color: '#6366f1' },
+        itemStyle: { color: '#6366f1' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(99,102,241,0.15)' }, { offset: 1, color: 'rgba(99,102,241,0)' }] } }
+      },
+      {
+        name: t('overview.trendBorrows'),
+        type: 'line',
+        data: borrows,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 1.5, color: '#f59e0b' },
+        itemStyle: { color: '#f59e0b' }
+      },
+      {
+        name: t('overview.trendReturns'),
+        type: 'line',
+        data: returns,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 1.5, color: '#10b981' },
+        itemStyle: { color: '#10b981' }
+      },
+      {
+        name: t('overview.trendBorrowers'),
+        type: 'line',
+        yAxisIndex: 1,
+        data: borrowers,
+        smooth: true,
+        symbol: 'diamond',
+        symbolSize: 5,
+        lineStyle: { width: 2, color: '#ec4899', type: 'dashed' },
+        itemStyle: { color: '#ec4899' }
+      }
     ]
   }
-  const yoy = s?.yoy_changes || {}
-  const dod = s?.dod_changes || {}
-  const fmtChange = (key) => {
-    const val = yoy[key]
-    if (val === null || val === undefined) return t('common.noData')
-    const sign = val >= 0 ? '+' : ''
-    return `${sign}${val}%`
-  }
-  const fmtChangeType = (key) => {
-    const val = yoy[key]
-    if (val === null || val === undefined) return 'neutral'
-    return val >= 0 ? 'up' : 'down'
-  }
-  const fmtDod = (key) => {
-    const val = dod[key]
-    if (val === null || val === undefined) return t('common.noData')
-    const sign = val >= 0 ? '+' : ''
-    return `${sign}${val}%`
-  }
-  const fmtDodType = (key) => {
-    const val = dod[key]
-    if (val === null || val === undefined) return 'neutral'
-    return val >= 0 ? 'up' : 'down'
-  }
-  const borrowRate = s.total_books > 0 ? Math.round((s.cko_count || 0) / s.total_books * 1000) / 10 : 0
-  const activeRate = s.total_readers > 0 ? Math.round((s.active_readers || 0) / s.total_readers * 1000) / 10 : 0
-  const avgBorrow = s.total_readers > 0 ? Math.round((s.total_borrows || 0) / s.total_readers * 10) / 10 : 0
-  const neverBorrowed = h?.never_borrowed_books || 0
-  return [
-    { key: 'total_flow', label: t('overview.totalFlow'), value: formatNumber(s.total_borrows || 0), change: fmtChange('total_borrows'), changeType: fmtChangeType('total_borrows'), icon: 'book', color: 'var(--chart-primary)' },
-    { key: 'registered_readers', label: t('overview.registeredReaders'), value: formatNumber(s.total_readers || 0), change: fmtChange('total_readers'), changeType: fmtChangeType('total_readers'), icon: 'users', color: 'var(--color-info-500)' },
-    { key: 'active_readers', label: t('overview.activeReaders'), value: formatNumber(s.active_readers || 0), change: fmtChange('active_readers'), changeType: fmtChangeType('active_readers'), icon: 'user-check', color: 'var(--chart-accent)' },
-    { key: 'books_in_library', label: t('overview.booksInLibrary'), value: formatNumber(s.total_books || 0), change: fmtChange('total_books'), changeType: fmtChangeType('total_books'), icon: 'archive', color: 'var(--chart-secondary-light)' },
-    { key: 'borrowed_books', label: t('overview.borrowedBooks'), value: formatNumber(s.cko_count || 0), change: fmtChange('cko_count'), changeType: fmtChangeType('cko_count'), icon: 'arrow-up', color: 'var(--chart-primary-light)' },
-    { key: 'returned_books', label: t('overview.returnedBooks'), value: formatNumber(s.cki_count || 0), change: fmtChange('cki_count'), changeType: fmtChangeType('cki_count'), icon: 'arrow-down', color: 'var(--chart-danger)' },
-    { key: 'library_visits', label: t('overview.libraryRenewals'), value: formatNumber(s.reh_count || 0), change: fmtChange('reh_count'), changeType: fmtChangeType('reh_count'), icon: 'refresh', color: 'var(--chart-secondary)' },
-    { key: 'online_renewals', label: t('overview.onlineRenewals'), value: formatNumber(s.rei_count || 0), change: fmtChange('rei_count'), changeType: fmtChangeType('rei_count'), icon: 'wifi', color: 'var(--chart-primary)' },
-    { key: 'total_categories', label: t('overview.totalCategories'), value: formatNumber(s.total_categories || 0), change: '-', changeType: 'neutral', icon: 'layers', color: 'var(--chart-accent)' },
-    { key: 'today_borrows', label: t('overview.todayBorrows'), value: formatNumber(s.today_borrows || 0), change: fmtDod('borrows'), changeType: fmtDodType('borrows'), changeLabel: 'comparedToYesterday', icon: 'book-open', color: 'var(--chart-primary-light)' },
-    { key: 'today_returns', label: t('overview.todayReturns'), value: formatNumber(s.today_returns || 0), change: fmtDod('returns'), changeType: fmtDodType('returns'), changeLabel: 'comparedToYesterday', icon: 'book-closed', color: 'var(--chart-danger)' },
-    { key: 'today_visits', label: t('overview.todayVisits'), value: formatNumber(s.today_visits || 0), change: fmtDod('visits'), changeType: fmtDodType('visits'), changeLabel: 'comparedToYesterday', icon: 'map-pin', color: 'var(--chart-accent)' },
-    { key: 'borrow_rate', label: t('overview.borrowRate'), value: borrowRate + '%', rate: borrowRate, change: '-', changeType: 'neutral', icon: 'percent', color: 'var(--chart-primary)' },
-    { key: 'active_rate', label: t('overview.activeReaderRate'), value: activeRate + '%', rate: activeRate, change: '-', changeType: 'neutral', icon: 'activity', color: 'var(--color-info-500)' },
-    { key: 'avg_borrow', label: t('overview.avgBorrowPerReader'), value: avgBorrow, unit: t('overview.times'), change: '-', changeType: 'neutral', icon: 'trending-up', color: 'var(--chart-secondary-light)' },
-    { key: 'never_borrowed', label: t('overview.neverBorrowedBooks'), value: formatNumber(neverBorrowed), change: '-', changeType: 'neutral', icon: 'book-off', color: 'var(--chart-danger)' }
-  ]
 })
 
-const rateCards = computed(() => {
-  const s = props.allData?.overview?.stats
-  if (!s) return []
-  const borrowRate = s.total_books > 0 ? Math.round((s.cko_count || 0) / s.total_books * 1000) / 10 : 0
-  const activeRate = s.total_readers > 0 ? Math.round((s.active_readers || 0) / s.total_readers * 1000) / 10 : 0
-  return [
-    { key: 'borrow_rate', label: t('overview.borrowRate'), value: borrowRate + '%', rate: borrowRate, color: 'var(--chart-primary)', icon: 'percent' },
-    { key: 'active_rate', label: t('overview.activeReaderRate'), value: activeRate + '%', rate: activeRate, color: 'var(--color-info-500)', icon: 'activity' }
-  ]
+const collectionHealth = computed(() => {
+  return props.allData?.overview?.collectionHealth || { total_books: 0, borrowed_books: 0, zero_borrow: 0, utilization: 0 }
 })
 
-const metricCards = computed(() => {
-  const s = props.allData?.overview?.stats
-  if (!s) return []
-  const avgBorrow = s.total_readers > 0 ? Math.round((s.total_borrows || 0) / s.total_readers * 10) / 10 : 0
-  const ckoCount = s.cko_count || 0
-  const ckiCount = s.cki_count || 0
-  const borrowReturnRatio = ckiCount > 0 ? (ckoCount / ckiCount).toFixed(2) : '-'
-  return [
-    { key: 'avg_borrow', label: t('overview.avgBorrowPerReader'), value: avgBorrow, unit: t('overview.times'), color: 'var(--chart-secondary-light)', icon: 'trending-up' },
-    { key: 'borrow_return_ratio', label: t('overview.borrowReturnRatio'), value: borrowReturnRatio, primary: formatNumber(ckoCount), primaryLabel: t('overview.borrowedBooks'), secondary: formatNumber(ckiCount), secondaryLabel: t('overview.returnedBooks'), color: 'var(--chart-danger)', icon: 'scale' }
-  ]
-})
+const readerHeatmapOption = computed(() => {
+  const data = props.allData?.overview?.readerActivityHeatmap
+  if (!data || !data.data || data.data.length === 0) return null
 
-const historicalCards = computed(() => {
-  const h = props.allData?.overview?.historicalStats
-  if (!h || h.data_years === 0) return []
-  const monthNames = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
-  return [
-    { key: 'data_years', label: t('overview.dataYears'), value: h.data_years, unit: t('overview.years'), sub: `${h.data_start_year} - ${h.data_end_year}`, color: 'var(--chart-primary)', icon: 'calendar' },
-    { key: 'avg_monthly', label: t('overview.avgMonthlyCirc'), value: formatNumber(h.avg_monthly_circulations), unit: t('overview.times'), color: 'var(--chart-secondary)', icon: 'bar-chart' },
-    { key: 'avg_daily', label: t('overview.avgDailyCirc'), value: formatNumber(h.avg_daily_circulations), unit: t('overview.times'), color: 'var(--chart-accent)', icon: 'clock' },
-    { key: 'peak_month', label: t('overview.peakMonth'), value: monthNames[h.peak_month] || '-', unit: t('overview.month'), sub: `${t('overview.circCount')} ${formatNumber(h.peak_month_count)}`, color: 'var(--chart-danger)', icon: 'peak' },
-    { key: 'peak_ym', label: t('overview.peakYearMonth'), value: h.peak_year_month, sub: `${formatNumber(h.peak_ym_count)} ${t('overview.times')}`, color: 'var(--chart-primary-light)', icon: 'trophy' },
-    { key: 'book_turnover', label: t('overview.bookTurnoverRate'), value: h.book_turnover_rate + '%', rate: h.book_turnover_rate, color: 'var(--color-info-500)', icon: 'repeat' },
-    { key: 'reader_retention', label: t('overview.readerRetentionRate'), value: h.reader_retention_rate + '%', rate: h.reader_retention_rate, color: 'var(--chart-secondary-light)', icon: 'heart' },
-    { key: 'renew_rate', label: t('overview.renewRate'), value: h.renew_rate + '%', rate: h.renew_rate, color: 'var(--chart-primary)', icon: 'refresh-rate' },
-    { key: 'never_borrowed', label: t('overview.neverBorrowedBooks'), value: formatNumber(h.never_borrowed_books), primary: formatNumber(h.borrowed_distinct_books), primaryLabel: t('overview.everBorrowed'), secondary: formatNumber(h.never_borrowed_books), secondaryLabel: t('overview.neverBorrowed'), color: 'var(--chart-danger)', icon: 'book-off' }
-  ]
-})
+  const days = data.days || []
+  const hours = data.hours || []
+  const maxVal = data.max || 1
 
-const yearlyTrend = computed(() => {
-  const h = props.allData?.overview?.historicalStats
-  if (!h || !h.yearly_trend || h.yearly_trend.length === 0) return []
-  const reversed = [...h.yearly_trend].reverse()
-  const maxCount = Math.max(...reversed.map(item => item.count))
-  return reversed.map(item => ({ ...item, maxCount }))
+  return {
+    tooltip: {
+      position: 'inside',
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: '#e5e7eb',
+      textStyle: { fontSize: 11, color: '#333' },
+      formatter: (params) => {
+        if (!params || params.value === undefined) return ''
+        const dayName = days[params.value[1]] || ''
+        const hourName = hours[params.value[0]] || ''
+        return `${dayName} ${hourName}<br/>${t('overview.heatmapBorrowers')}: <b>${params.value[2]}</b>`
+      }
+    },
+    grid: { top: 4, right: 8, bottom: 24, left: 40 },
+    xAxis: {
+      type: 'category',
+      data: hours,
+      splitArea: { show: false },
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 9, color: '#9ca3af', interval: 1 }
+    },
+    yAxis: {
+      type: 'category',
+      data: days,
+      splitArea: { show: false },
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 9, color: '#9ca3af' }
+    },
+    visualMap: {
+      min: 0,
+      max: maxVal,
+      show: false,
+      inRange: {
+        color: ['#f0f5ff', '#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af']
+      }
+    },
+    series: [{
+      type: 'heatmap',
+      data: data.data,
+      emphasis: {
+        itemStyle: { shadowBlur: 6, shadowColor: 'rgba(59,130,246,0.4)' }
+      },
+      itemStyle: { borderColor: '#fff', borderWidth: 1, borderRadius: 2 }
+    }]
+  }
 })
 
 onMounted(() => {
-  loadInsights()
+  if (!props.allData?.overview?.stats) {
+    dataStore.preloadAll?.()
+  }
 })
-
-async function loadInsights() {
-  try {
-    const data = await insightsApi.auto(5)
-    if (data?.insights) insights.value = data.insights
-  } catch (e) { console.error(e) }
-}
 </script>
 
 <template>
-  <div class="overview-container">
-    <div v-if="loadError" class="load-error-banner">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>{{ t('common.loadFailed') }}</span>
-      <button class="retry-btn" @click="retryLoad">{{ t('common.retry') }}</button>
-    </div>
-    <div class="stats-cards-grid">
-      <div
-        v-for="(card, index) in statsCards"
-        :key="card.key"
-        class="stat-card"
-        :class="{ 'stat-card-empty': card.value === '-', 'stat-card-clickable': cardNavMap[card.key] }"
-        :style="{ '--card-color': card.color, '--delay': (index * 0.04) + 's' }"
-        @click="handleCardClick(card)"
-      >
-        <div class="stat-icon-wrapper">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" class="stat-icon">
-            <template v-if="card.icon === 'book'">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </template>
-            <template v-else-if="card.icon === 'users'">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </template>
-            <template v-else-if="card.icon === 'user-check'">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="8.5" cy="7" r="4"/>
-              <polyline points="17 11 19 13 23 9"/>
-            </template>
-            <template v-else-if="card.icon === 'archive'">
-              <polyline points="21 8 21 21 3 21 3 8"/>
-              <rect x="1" y="3" width="22" height="5"/>
-              <line x1="10" y1="12" x2="14" y2="12"/>
-            </template>
-            <template v-else-if="card.icon === 'arrow-up'">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5 12 12 5 19 12"/>
-            </template>
-            <template v-else-if="card.icon === 'arrow-down'">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <polyline points="19 12 12 19 5 12"/>
-            </template>
-            <template v-else-if="card.icon === 'refresh'">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </template>
-            <template v-else-if="card.icon === 'wifi'">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-              <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-              <line x1="12" y1="20" x2="12.01" y2="20"/>
-            </template>
-            <template v-else-if="card.icon === 'layers'">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </template>
-            <template v-else-if="card.icon === 'book-open'">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-            </template>
-            <template v-else-if="card.icon === 'book-closed'">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </template>
-            <template v-else-if="card.icon === 'map-pin'">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </template>
-            <template v-else-if="card.icon === 'percent'">
-              <line x1="19" y1="5" x2="5" y2="19"/>
-              <circle cx="6.5" cy="6.5" r="2.5"/>
-              <circle cx="17.5" cy="17.5" r="2.5"/>
-            </template>
-            <template v-else-if="card.icon === 'activity'">
+  <div class="overview">
+    <div class="trend-row">
+      <div class="trend-main">
+        <div class="dash-card">
+          <div class="col-card-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="col-card-header-icon trend-icon">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </template>
-            <template v-else-if="card.icon === 'trending-up'">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-              <polyline points="17 6 23 6 23 12"/>
-            </template>
-            <template v-else-if="card.icon === 'book-off'">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-              <line x1="2" y1="2" x2="22" y2="22"/>
-            </template>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <span class="stat-label">{{ card.label }}</span>
-          <div class="stat-value-row">
-            <span class="stat-value">{{ card.value }}</span>
-            <span v-if="card.unit" class="stat-unit">{{ card.unit }}</span>
-          </div>
-          <div v-if="card.rate !== undefined" class="stat-progress-track">
-            <div class="stat-progress-fill" :style="{ width: Math.min(card.rate, 100) + '%' }"></div>
-          </div>
-          <div class="stat-change" :class="card.changeType">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-if="card.changeType === 'up'" class="change-icon">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-              <polyline points="17 6 23 6 23 12"/>
             </svg>
-            <span>{{ t(card.changeLabel ? 'common.' + card.changeLabel : 'common.comparedToLastYear') }} {{ card.change }}</span>
+            <span>{{ t('overview.trend7d') }}</span>
+            <div class="col-card-stats">
+              <div class="col-stat">
+                <span class="col-stat-label">{{ t('overview.totalFlow') }}</span>
+                <span class="col-stat-value">{{ formatNum(s.total_borrows || 0) }}</span>
+              </div>
+              <div class="col-stat">
+                <span class="col-stat-label">{{ t('overview.activeReaderRate') }}</span>
+                <span class="col-stat-value">{{ s.total_readers > 0 ? Math.round((s.active_readers || 0) / s.total_readers * 1000) / 10 : 0 }}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="dash-chart-wrap">
+            <v-chart v-if="trend7dOption" class="dash-chart" :option="trend7dOption" autoresize />
+            <div v-else class="col-card-empty">
+              <span>{{ t('common.noData') }}</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <div v-if="rateCards.length || metricCards.length" class="metrics-section">
-      <div v-if="rateCards.length" class="rate-cards-row">
-        <div
-          v-for="(card, index) in rateCards"
-          :key="card.key"
-          class="rate-card"
-          :style="{ '--card-color': card.color, '--delay': (index * 0.06) + 's' }"
-        >
-          <div class="rate-card-header">
-            <div class="rate-icon-wrapper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="rate-icon">
-                <template v-if="card.icon === 'percent'">
-                  <line x1="19" y1="5" x2="5" y2="19"/>
-                  <circle cx="6.5" cy="6.5" r="2.5"/>
-                  <circle cx="17.5" cy="17.5" r="2.5"/>
-                </template>
-                <template v-else-if="card.icon === 'activity'">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                </template>
+      <div class="trend-side">
+        <div class="dash-card">
+          <div class="col-card-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="col-card-header-icon alert-icon">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>{{ t('overview.alerts') }}</span>
+            <div class="col-card-stats">
+              <div class="col-stat">
+                <span class="col-stat-label">{{ t('overview.bookTurnoverRate') }}</span>
+                <span class="col-stat-value">{{ h.book_turnover_rate || 0 }}%</span>
+              </div>
+              <div class="col-stat">
+                <span class="col-stat-label">{{ t('overview.opsHealth') }}</span>
+                <span class="col-stat-value">{{ (s.today_borrows || 0) + (s.today_returns || 0) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-card-body">
+            <div v-for="alert in alertItems" :key="alert.key" class="alert-line" :class="alert.type">
+              <svg v-if="alert.type === 'danger'" viewBox="0 0 24 24" fill="currentColor" class="alert-line-icon danger-icon">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="16" r="1"/>
               </svg>
-            </div>
-            <span class="rate-label">{{ card.label }}</span>
-          </div>
-          <div class="rate-value-row">
-            <span class="rate-value">{{ card.value }}</span>
-          </div>
-          <div class="rate-progress-track">
-            <div class="rate-progress-fill" :style="{ width: Math.min(card.rate, 100) + '%' }"></div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="metricCards.length" class="metric-cards-row">
-        <div
-          v-for="(card, index) in metricCards"
-          :key="card.key"
-          class="metric-card"
-          :style="{ '--card-color': card.color, '--delay': (index * 0.06) + 's' }"
-        >
-          <div class="metric-card-header">
-            <div class="metric-icon-wrapper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="metric-icon">
-                <template v-if="card.icon === 'trending-up'">
-                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                  <polyline points="17 6 23 6 23 12"/>
-                </template>
-                <template v-else-if="card.icon === 'scale'">
-                  <line x1="12" y1="3" x2="12" y2="21"/>
-                  <line x1="4" y1="8" x2="20" y2="8"/>
-                  <circle cx="4" cy="14" r="2"/>
-                  <circle cx="20" cy="14" r="2"/>
-                </template>
+              <svg v-else viewBox="0 0 24 24" fill="currentColor" class="alert-line-icon warning-icon">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="17" r="1"/>
               </svg>
+              <span class="alert-line-text">{{ alert.text }}</span>
             </div>
-            <span class="metric-label">{{ card.label }}</span>
-          </div>
-          <div class="metric-value-row">
-            <span class="metric-value">{{ card.value }}</span>
-            <span v-if="card.unit" class="metric-unit">{{ card.unit }}</span>
-          </div>
-          <div v-if="card.primary" class="metric-pair">
-            <div class="metric-pair-item">
-              <span class="pair-label">{{ card.primaryLabel }}</span>
-              <span class="pair-value">{{ card.primary }}</span>
-            </div>
-            <div class="metric-pair-divider"></div>
-            <div class="metric-pair-item">
-              <span class="pair-label">{{ card.secondaryLabel }}</span>
-              <span class="pair-value">{{ card.secondary }}</span>
+            <div v-if="alertItems.length === 0" class="col-card-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="col-card-empty-icon">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>{{ t('overview.noAlerts') }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="historicalCards.length" class="historical-section">
-      <div class="section-title">{{ t('overview.historicalAnalysis') }}</div>
-      <div class="historical-cards-grid">
-        <div
-          v-for="(card, index) in historicalCards"
-          :key="card.key"
-          class="hist-card"
-          :class="{ 'hist-card-rate': card.rate !== undefined, 'hist-card-compare': card.primary }"
-          :style="{ '--card-color': card.color, '--delay': (index * 0.04) + 's' }"
-        >
-          <div class="hist-card-header">
-            <div class="hist-icon-wrapper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hist-icon">
-                <template v-if="card.icon === 'calendar'">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </template>
-                <template v-else-if="card.icon === 'bar-chart'">
-                  <line x1="12" y1="20" x2="12" y2="10"/>
-                  <line x1="18" y1="20" x2="18" y2="4"/>
-                  <line x1="6" y1="20" x2="6" y2="16"/>
-                </template>
-                <template v-else-if="card.icon === 'clock'">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </template>
-                <template v-else-if="card.icon === 'peak'">
-                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                  <polyline points="17 6 23 6 23 12"/>
-                </template>
-                <template v-else-if="card.icon === 'trophy'">
-                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-                  <path d="M4 22h16"/>
-                  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-                  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-                  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-                </template>
-                <template v-else-if="card.icon === 'repeat'">
-                  <polyline points="17 1 21 5 17 9"/>
-                  <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                  <polyline points="7 23 3 19 7 15"/>
-                  <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-                </template>
-                <template v-else-if="card.icon === 'heart'">
-                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-                </template>
-                <template v-else-if="card.icon === 'refresh-rate'">
-                  <polyline points="23 4 23 10 17 10"/>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </template>
-                <template v-else-if="card.icon === 'book-off'">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                  <line x1="2" y1="2" x2="22" y2="22"/>
-                </template>
+    <div class="bottom-row">
+      <div class="bottom-left">
+        <div class="col-card">
+          <div class="col-card-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="col-card-header-icon heatmap-icon">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            <span>{{ t('overview.readerActivityHeatmap') }}</span>
+          </div>
+          <div class="col-card-body">
+            <v-chart v-if="readerHeatmapOption" class="heatmap-chart" :option="readerHeatmapOption" autoresize />
+            <div v-else class="col-card-empty">
+              <span>{{ t('common.noData') }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-right">
+        <div class="col-card">
+          <div class="col-card-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="col-card-header-icon bell-icon">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span>{{ t('overview.todayInsights') }}</span>
+          </div>
+        <div class="col-card-body">
+          <div v-for="item in todayInsight" :key="item.key" class="insight-row-item">
+            <div class="insight-row-top">
+              <div class="insight-row-label-wrap">
+                <span class="insight-row-dot" :class="item.key"></span>
+                <span class="insight-row-label">{{ item.label }}</span>
+              </div>
+              <span v-if="item.change != null" class="insight-row-change" :class="item.change >= 0 ? 'up' : 'down'">
+                {{ formatPct(item.change) }}
+              </span>
+            </div>
+            <span class="insight-row-value">{{ item.value }}</span>
+          </div>
+          <div class="health-divider"></div>
+          <div class="health-body-row">
+            <div class="health-ring-wrap-sm">
+              <svg viewBox="0 0 36 36" class="health-ring">
+                <path class="health-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="health-ring-fill" :stroke-dasharray="`${collectionHealth.utilization}, 100`" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
               </svg>
+              <div class="health-ring-label">
+                <span class="health-ring-pct">{{ collectionHealth.utilization }}%</span>
+                <span class="health-ring-sub">{{ t('overview.healthUtil') }}</span>
+              </div>
             </div>
-            <span class="hist-label">{{ card.label }}</span>
-          </div>
-          <div class="hist-value-row">
-            <span class="hist-value">{{ card.value }}</span>
-            <span v-if="card.unit" class="hist-unit">{{ card.unit }}</span>
-          </div>
-          <div v-if="card.sub" class="hist-sub">{{ card.sub }}</div>
-          <div v-if="card.rate !== undefined" class="hist-progress-track">
-            <div class="hist-progress-fill" :style="{ width: Math.min(card.rate, 100) + '%' }"></div>
-          </div>
-          <div v-if="card.primary" class="metric-pair">
-            <div class="metric-pair-item">
-              <span class="pair-label">{{ card.primaryLabel }}</span>
-              <span class="pair-value">{{ card.primary }}</span>
-            </div>
-            <div class="metric-pair-divider"></div>
-            <div class="metric-pair-item">
-              <span class="pair-label">{{ card.secondaryLabel }}</span>
-              <span class="pair-value">{{ card.secondary }}</span>
+            <div class="health-stats-compact">
+              <div class="health-stat">
+                <span class="health-stat-label">{{ t('overview.healthTotalBooks') }}</span>
+                <span class="health-stat-value">{{ formatNum(collectionHealth.total_books) }}</span>
+              </div>
+              <div class="health-stat">
+                <span class="health-stat-label">{{ t('overview.healthBorrowedBooks') }}</span>
+                <span class="health-stat-value">{{ formatNum(collectionHealth.borrowed_books) }}</span>
+              </div>
+              <div class="health-stat">
+                <span class="health-stat-label">{{ t('overview.healthZeroBorrow') }}</span>
+                <span class="health-stat-value warn">{{ formatNum(collectionHealth.zero_borrow) }}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div v-if="yearlyTrend.length" class="yearly-trend-card">
-        <div class="yearly-trend-title">{{ t('overview.yearlyTrend') }}</div>
-        <div class="yearly-bars">
-          <div v-for="(item, idx) in yearlyTrend" :key="item.year" class="yearly-bar-item">
-            <div class="yearly-bar-track">
-              <div
-                class="yearly-bar-fill"
-                :style="{
-                  height: (item.count / item.maxCount * 100) + '%',
-                  '--bar-color': idx === yearlyTrend.length - 1 ? 'var(--chart-primary)' : 'var(--chart-secondary-light)'
-                }"
-              ></div>
-            </div>
-            <span class="yearly-bar-label">{{ item.year }}</span>
-            <span class="yearly-bar-value">{{ formatNumber(item.count) }}</span>
-          </div>
         </div>
       </div>
-    </div>
-
-    <div v-if="insights.length" class="insights-section">
-      <InsightsPanel :insights="insights" />
     </div>
   </div>
 </template>
 
-<style scoped src="./OverviewView.css"></style>
+<style scoped>
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+.trend-row {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+.trend-main {
+  flex: 7;
+  min-width: 0;
+}
+
+.trend-side {
+  flex: 3;
+  min-width: 0;
+}
+
+.bottom-row {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+.bottom-left {
+  flex: 7;
+  min-width: 0;
+}
+
+.bottom-right {
+  flex: 3;
+  min-width: 0;
+}
+
+.bottom-left .col-card,
+.bottom-right .col-card {
+  height: 100%;
+}
+
+.col-card {
+  flex: 1;
+  background: var(--chart-bg);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.col-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-800);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-neutral-100);
+  flex-shrink: 0;
+}
+
+.col-card-stats {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.col-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.col-stat-label {
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  white-space: nowrap;
+}
+
+.col-stat-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  white-space: nowrap;
+}
+
+.col-card-header-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.col-card-header-icon.bell-icon {
+  color: var(--data-borrow);
+}
+
+.col-card-header-icon.alert-icon {
+  color: var(--color-danger-500);
+}
+
+.col-card-header-icon.stats-icon {
+  color: var(--data-book);
+}
+
+.col-card-header-icon.trend-icon {
+  color: #6366f1;
+}
+
+.col-card-header-icon.health-icon {
+  color: var(--color-success-500);
+}
+
+.col-card-header-icon.anomaly-icon {
+  color: var(--color-warning-500);
+}
+
+.col-card-header-icon.heatmap-icon {
+  color: #3b82f6;
+}
+
+.col-card-body {
+  padding: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.col-card-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-neutral-400);
+  font-size: var(--text-sm);
+  flex: 1;
+  justify-content: center;
+}
+
+.col-card-empty-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.insight-row-item {
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.insight-row-item:hover {
+  background: rgba(0,0,0,0.02);
+}
+
+.insight-row-item + .insight-row-item {
+  border-top: 1px solid var(--color-neutral-100);
+}
+
+.insight-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.insight-row-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.insight-row-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.insight-row-dot.visits {
+  background: var(--data-visit);
+  box-shadow: 0 0 6px rgba(80,227,194,0.4);
+}
+
+.insight-row-dot.borrows {
+  background: var(--data-borrow);
+  box-shadow: 0 0 6px rgba(245,166,35,0.4);
+}
+
+.insight-row-dot.returns {
+  background: var(--data-return);
+  box-shadow: 0 0 6px rgba(126,211,33,0.4);
+}
+
+.insight-row-label {
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+}
+
+.insight-row-change {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.insight-row-change.up {
+  color: var(--color-success-600);
+  background: rgba(16,185,129,0.1);
+}
+
+.insight-row-change.down {
+  color: var(--color-danger-600);
+  background: rgba(239,68,68,0.1);
+}
+
+.insight-row-value {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  letter-spacing: var(--tracking-tight);
+  padding-left: calc(8px + var(--space-2));
+}
+
+.health-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-neutral-200), transparent);
+  margin: var(--space-1) 0;
+  flex-shrink: 0;
+}
+
+.alert-line {
+  padding: var(--space-2) var(--space-1);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+}
+
+.alert-line:hover {
+  background: rgba(0,0,0,0.02);
+}
+
+.alert-line + .alert-line {
+  border-top: none;
+  margin-top: var(--space-1);
+}
+
+.alert-line-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alert-line-icon.danger-icon {
+  color: var(--color-danger-500);
+  filter: drop-shadow(0 0 4px rgba(239,68,68,0.35));
+}
+
+.alert-line-icon.warning-icon {
+  color: var(--color-warning-500, #f59e0b);
+  filter: drop-shadow(0 0 4px rgba(245,158,11,0.35));
+}
+
+.alert-line.danger {
+  background: rgba(239,68,68,0.04);
+  border-left: 3px solid var(--color-danger-500);
+  padding-left: var(--space-2);
+}
+
+.alert-line.danger .alert-line-text {
+  color: var(--color-danger-700);
+  font-weight: var(--font-medium);
+}
+
+.alert-line.warning {
+  background: rgba(245,158,11,0.04);
+  border-left: 3px solid var(--color-warning-500, #f59e0b);
+  padding-left: var(--space-2);
+}
+
+.alert-line.warning .alert-line-text {
+  color: var(--color-warning-700, #b45309);
+  font-weight: var(--font-medium);
+}
+
+.alert-line-text {
+  font-size: var(--text-sm);
+  color: var(--color-neutral-700);
+  line-height: 1.5;
+}
+
+.dash-card {
+  background: var(--chart-bg);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-neutral-200);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.dash-chart-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.dash-chart {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+}
+
+.heatmap-chart {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+
+.health-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  min-height: 0;
+}
+
+.health-body-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.health-ring-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.health-ring-wrap-sm {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.health-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.health-ring-bg {
+  fill: none;
+  stroke: var(--color-neutral-100);
+  stroke-width: 3;
+}
+
+.health-ring-fill {
+  fill: none;
+  stroke: var(--color-success-500);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.8s ease;
+}
+
+.health-ring-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.health-ring-pct {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  line-height: 1;
+}
+
+.health-ring-sub {
+  font-size: 9px;
+  color: var(--color-neutral-400);
+  margin-top: 1px;
+}
+
+.health-ring-text {
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+  margin-top: 2px;
+}
+
+.health-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.health-stats-compact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.health-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.health-stat-label {
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
+}
+
+.health-stat-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-800);
+}
+
+.health-stat-value.warn {
+  color: var(--color-danger-500);
+}
+
+@media (max-width: 1200px) {
+  .trend-row {
+    flex-direction: column;
+  }
+  .trend-main, .trend-side {
+    flex: none;
+  }
+  .bottom-row {
+    flex-direction: column;
+  }
+  .bottom-left, .bottom-right {
+    flex: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .col-card-stats {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+}
+
+
+</style>

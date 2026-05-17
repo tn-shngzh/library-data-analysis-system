@@ -7,10 +7,10 @@ import { borrowApi } from '@/api/borrows'
 export const useDataStore = defineStore('data', {
   state: () => ({
     loaded: false,
-    overview: { stats: null, historicalStats: null, categories: null, recentBooks: null },
-    readers: { stats: null, readerTypes: null, monthlyTrend: null, topReaders: null },
+    overview: { stats: null, historicalStats: null, categories: null, recentBooks: null, monthlyBorrows: null, trend7d: null, collectionHealth: null, readerActivityHeatmap: null },
+    readers: { stats: null, readerTypes: null, monthlyTrend: null, topReaders: null, degreeStats: null, degreeHourHeatmap: null, frequencyDistribution: null },
     books: { stats: null, categories: null, hotBooks: null },
-    borrows: { stats: null, actionStats: null, degreeStats: null, topBorrowers: null, topBooks: null, recentBorrows: null }
+    borrows: { stats: null, actionStats: null, degreeStats: null, topBorrowers: null, topBooks: null, recentBorrows: null, monthlyBorrows: null, monthlyReturns: null }
   }),
   actions: {
     async preloadAll() {
@@ -32,13 +32,20 @@ export const useDataStore = defineStore('data', {
           ['stats', 'overview'],
           ['historicalStats', 'overview'],
           ['categories', 'overview'],
-          ['recentBooks', 'overview']
+          ['recentBooks', 'overview'],
+          ['monthlyBorrows', 'overview'],
+          ['trend7d', 'overview'],
+          ['collectionHealth', 'overview'],
+          ['readerActivityHeatmap', 'overview']
         ]),
         loadModule(readerApi.getAll, 'readers', [
           ['stats', 'readers'],
           ['readerTypes', 'readers'],
           ['monthlyTrend', 'readers'],
-          ['topReaders', 'readers']
+          ['topReaders', 'readers'],
+          ['degreeStats', 'readers'],
+          ['degreeHourHeatmap', 'readers'],
+          ['frequencyDistribution', 'readers']
         ]),
         loadModule(bookApi.getAll, 'books', [
           ['stats', 'books'],
@@ -51,7 +58,9 @@ export const useDataStore = defineStore('data', {
           ['degreeStats', 'borrows'],
           ['topBorrowers', 'borrows'],
           ['topBooks', 'borrows'],
-          ['recentBorrows', 'borrows']
+          ['recentBorrows', 'borrows'],
+          ['monthlyBorrows', 'borrows'],
+          ['monthlyReturns', 'borrows']
         ])
       ])
 
@@ -59,10 +68,10 @@ export const useDataStore = defineStore('data', {
     },
     async refreshModule(moduleName) {
       const moduleConfigs = {
-        overview: { api: overviewApi.getAll, mappings: [['stats', 'overview'], ['historicalStats', 'overview'], ['categories', 'overview'], ['recentBooks', 'overview']] },
-        readers: { api: readerApi.getAll, mappings: [['stats', 'readers'], ['readerTypes', 'readers'], ['monthlyTrend', 'readers'], ['topReaders', 'readers']] },
+        overview: { api: overviewApi.getAll, mappings: [['stats', 'overview'], ['historicalStats', 'overview'], ['categories', 'overview'], ['recentBooks', 'overview'], ['monthlyBorrows', 'overview'], ['trend7d', 'overview'], ['collectionHealth', 'overview'], ['readerActivityHeatmap', 'overview']] },
+        readers: { api: readerApi.getAll, mappings: [['stats', 'readers'], ['readerTypes', 'readers'], ['monthlyTrend', 'readers'], ['topReaders', 'readers'], ['degreeStats', 'readers'], ['degreeHourHeatmap', 'readers'], ['frequencyDistribution', 'readers']] },
         books: { api: bookApi.getAll, mappings: [['stats', 'books'], ['categories', 'books'], ['hotBooks', 'books']] },
-        borrows: { api: borrowApi.getAll, mappings: [['stats', 'borrows'], ['actionStats', 'borrows'], ['degreeStats', 'borrows'], ['topBorrowers', 'borrows'], ['topBooks', 'borrows'], ['recentBorrows', 'borrows']] }
+        borrows: { api: borrowApi.getAll, mappings: [['stats', 'borrows'], ['actionStats', 'borrows'], ['degreeStats', 'borrows'], ['topBorrowers', 'borrows'], ['topBooks', 'borrows'], ['recentBorrows', 'borrows'], ['monthlyBorrows', 'borrows'], ['monthlyReturns', 'borrows']] }
       }
 
       const config = moduleConfigs[moduleName]

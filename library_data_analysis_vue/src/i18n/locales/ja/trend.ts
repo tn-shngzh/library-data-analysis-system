@@ -19,5 +19,13 @@ export default {
   percent: '割合',
   rawData: '実データ',
   movingAvg: '移動平均線',
-  trendLine: 'トレンドライン'
+  trendLine: 'トレンドライン',
+  borrowTrend: '貸出トレンド',
+  readerTrend: '利用者トレンド',
+  borrowDist: '貸出分布',
+  readerDist: '利用者分布',
+  actionType: '操作タイプ分布',
+  readerType: '利用者タイプ分布',
+  hotBooks: '人気貸出 TOP10',
+  topReaders: 'アクティブ利用者 TOP10'
 }

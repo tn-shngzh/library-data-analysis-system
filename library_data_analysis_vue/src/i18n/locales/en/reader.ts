@@ -13,5 +13,13 @@ export default {
   type: 'Type',
   borrowCount: 'Borrow Count',
   month: 'Month',
-  activeCount: 'Active Count'
+  activeCount: 'Active Count',
+  distribution: 'Reader Distribution',
+  typeTab: 'Type Distribution',
+  degreeTab: 'Degree Distribution',
+  degreeHourHeatmap: 'Degree Activity Heatmap',
+  frequencyDistribution: 'Borrow Frequency Distribution',
+  personCount: 'Count',
+  totalReadersLabel: 'Total Readers',
+  avgBorrowsLabel: 'Avg Borrows'
 }

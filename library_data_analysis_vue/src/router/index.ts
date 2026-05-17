@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
-import LibraryView from '../views/LibraryView.vue'
 import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
@@ -20,13 +19,7 @@ const router = createRouter({
       path: '/dashboard',
       name: 'dashboard',
       component: DashboardView,
-      meta: { requiresAuth: true, role: 'admin' }
-    },
-    {
-      path: '/library',
-      name: 'library',
-      component: LibraryView,
-      meta: { requiresAuth: true, role: 'user' }
+      meta: { requiresAuth: true }
     },
     {
       path: '/settings',
@@ -39,19 +32,13 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
-  const role = localStorage.getItem('role')
 
   if (to.meta.requiresAuth && !token) {
     next('/login')
     return
   }
 
-  if (to.path === '/dashboard' && role !== 'admin') {
-    next('/library')
-    return
-  }
-
-  if (to.path === '/library' && role === 'admin') {
+  if (to.path === '/login' && token) {
     next('/dashboard')
     return
   }

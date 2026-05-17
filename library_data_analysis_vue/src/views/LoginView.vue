@@ -79,11 +79,7 @@ const handleLogin = async () => {
         localStorage.removeItem('remember_username')
       }
       
-      if (data.system === 'library') {
-        router.push('/library')
-      } else {
-        router.push('/dashboard')
-      }
+      router.push('/dashboard')
     } else {
       error.value = (data && data.detail) || t('login.loginFailed')
       console.warn('[Login] Login failed:', error.value)

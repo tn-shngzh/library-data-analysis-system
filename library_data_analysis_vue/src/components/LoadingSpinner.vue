@@ -1,12 +1,13 @@
 <script setup>
 defineProps({
   loading: { type: Boolean, default: true },
-  text: { type: String, default: '加载中...' }
+  text: { type: String, default: '加载中...' },
+  overlay: { type: Boolean, default: false }
 })
 </script>
 
 <template>
-  <div v-if="loading" class="loading-container">
+  <div v-if="loading" class="loading-container" :class="{ 'overlay-mode': overlay }">
     <div class="loading-spinner">
       <div class="spinner"></div>
       <span>{{ text }}</span>
@@ -21,6 +22,25 @@ defineProps({
   justify-content: center;
   align-items: center;
   padding: 80px;
+}
+
+.loading-container.overlay-mode {
+  position: relative;
+  min-height: 200px;
+}
+
+.loading-container.overlay-mode::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  z-index: 1;
+}
+
+.loading-container.overlay-mode .loading-spinner {
+  position: relative;
+  z-index: 2;
 }
 
 .loading-spinner {

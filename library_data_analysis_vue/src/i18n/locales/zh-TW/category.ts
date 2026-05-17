@@ -13,5 +13,10 @@ export default {
   rank: '排名',
   name: '分類名稱',
   count: '數量',
-  percent: '佔比'
+  percent: '佔比',
+  literature: '文學',
+  technology: '科技',
+  history: '歷史',
+  art: '藝術',
+  philosophy: '哲學'
 }

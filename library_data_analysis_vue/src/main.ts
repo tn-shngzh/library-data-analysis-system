@@ -6,9 +6,11 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
+import { VChart } from './plugins/echarts'
 
 const app = createApp(App)
 
+app.component('v-chart', VChart)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)

@@ -19,5 +19,13 @@ export default {
   percent: 'Percentage',
   rawData: 'Raw Data',
   movingAvg: 'Moving Average',
-  trendLine: 'Trend Line'
+  trendLine: 'Trend Line',
+  borrowTrend: 'Borrowing Trend',
+  readerTrend: 'Reader Trend',
+  borrowDist: 'Borrowing Distribution',
+  readerDist: 'Reader Distribution',
+  actionType: 'Action Type Distribution',
+  readerType: 'Reader Type Distribution',
+  hotBooks: 'Hot Books TOP10',
+  topReaders: 'Active Readers TOP10'
 }

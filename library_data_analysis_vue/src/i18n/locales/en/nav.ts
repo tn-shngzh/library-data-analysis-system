@@ -1,13 +1,19 @@
 export default {
   overview: 'Overview',
-  category: 'Categories',
+  historical: 'Historical Analysis',
+  predict: 'Smart Prediction',
+  intelligence: 'Intelligence',
+  statistics: 'Statistical Analysis',
   borrow: 'Borrows',
   reader: 'Readers',
   trend: 'Trends',
   book: 'Books',
-  predict: 'Predictions',
-  analysis: 'Analysis',
   report: 'Reports',
   dataImport: 'Data Import',
-  settings: 'Settings'
+  group: {
+    overview: 'Overview',
+    ai: 'Prediction Analysis',
+    analysis: 'Data Analysis',
+    management: 'Management'
+  }
 }

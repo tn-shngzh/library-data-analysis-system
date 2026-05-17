@@ -13,5 +13,13 @@ export default {
   type: '類型',
   borrowCount: '借閱次數',
   month: '月份',
-  activeCount: '活躍人數'
+  activeCount: '活躍人數',
+  distribution: '讀者分佈',
+  typeTab: '類型分佈',
+  degreeTab: '學歷分佈',
+  degreeHourHeatmap: '學歷活躍時段熱力圖',
+  frequencyDistribution: '借閱頻次分佈',
+  personCount: '人數',
+  totalReadersLabel: '總讀者',
+  avgBorrowsLabel: '平均借閱'
 }
