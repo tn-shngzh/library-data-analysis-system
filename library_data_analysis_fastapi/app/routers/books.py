@@ -20,24 +20,28 @@ async def get_book_stats():
             cur.execute("SELECT COUNT(*) FROM book_categories")
             total_items = cur.fetchone()[0]
 
+            # 直接查询 circulations 表获取已借阅图书数
+            cur.execute("""
+                SELECT COUNT(DISTINCT bib_id)
+                FROM circulations
+                WHERE status = 'borrowed'
+            """)
+            borrowed_items = cur.fetchone()[0] or 0
+
             today = datetime.now().date()
-            this_month_start = int(today.replace(day=1).strftime('%Y%m%d'))
-            this_month_end = int(today.strftime('%Y%m%d'))
+            this_month = int(today.strftime('%Y%m'))
+            month_start = int(f"{this_month}01")
+            month_end = int(f"{this_month}31")
 
-            cur.execute("SELECT COUNT(DISTINCT bib_id) FROM circulations WHERE action_date BETWEEN %s AND %s", (this_month_start, this_month_end))
-            month_items = cur.fetchone()[0]
-
-            try:
-                cur.execute("SELECT COUNT(*) FROM mv_book_stats WHERE borrow_count > 0")
-                borrowed_items = cur.fetchone()[0]
-            except Exception:
-                conn.rollback()
-                cur.execute("""
-                    SELECT COUNT(DISTINCT bib_id)
-                    FROM circulations
-                    WHERE action = 'CKO'
-                """)
-                borrowed_items = cur.fetchone()[0]
+            # 本月借阅图书数（走索引，数据量小）
+            cur.execute("""
+                SELECT COUNT(DISTINCT bib_id)
+                FROM circulations
+                WHERE status = 'borrowed'
+                AND borrow_date BETWEEN %s AND %s
+            """, (month_start, month_end))
+            month_row = cur.fetchone()
+            month_items = month_row[0] or 0 if month_row else 0
 
             borrow_rate = round(borrowed_items / total_items * 100, 1) if total_items else 0
             zero_borrow = total_items - borrowed_items if total_items > borrowed_items else 0
@@ -51,7 +55,7 @@ async def get_book_stats():
 
     try:
         result = await run_sync_db(_query)
-        cache.cache_set(cache_key, result, 60)
+        cache.cache_set(cache_key, result, 3600)
         return result
     except Exception as e:
         logger.error("获取图书统计失败: %s", e, exc_info=True)
@@ -67,25 +71,25 @@ async def get_book_categories():
 
     def _query(conn):
         with conn.cursor() as cur:
+            # 直接查询 book_categories 表按分类分组统计
             cur.execute("""
-                SELECT bc.category, COUNT(*) as total_items
-                FROM book_categories bc
-                GROUP BY bc.category
-                ORDER BY total_items DESC
+                SELECT 
+                    category,
+                    COUNT(*) as count,
+                    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as percent
+                FROM book_categories
+                GROUP BY category
+                ORDER BY count DESC
             """)
             rows = cur.fetchall()
-            total = sum(r[1] for r in rows)
-            result = []
-            for i, r in enumerate(rows):
-                pct = round(r[1] / total * 100, 1) if total else 0
-                if i == len(rows) - 1:
-                    pct = round(100.0 - sum(round(rr[1] / total * 100, 1) for rr in rows[:-1]), 1)
-                result.append({"name": r[0], "count": r[1], "percent": pct})
-            return result
+            return [
+                {"name": r[0], "count": r[1], "percent": r[2]}
+                for r in rows
+            ]
 
     try:
         result = await run_sync_db(_query)
-        cache.cache_set(cache_key, result, 300)
+        cache.cache_set(cache_key, result, 3600)
         return result
     except Exception as e:
         logger.error("获取图书分类统计失败: %s", e, exc_info=True)
@@ -101,27 +105,17 @@ async def get_hot_books():
 
     def _query(conn):
         with conn.cursor() as cur:
-            try:
-                cur.execute("""
-                    SELECT t.bib_id, bc.name, t.category, t.borrow_count
-                    FROM mv_top_books t
-                    LEFT JOIN book_categories bc ON t.bib_id = bc.bib_id
-                    ORDER BY t.borrow_count DESC
-                    LIMIT 20
-                """)
-                rows = cur.fetchall()
-            except Exception:
-                conn.rollback()
-                cur.execute("""
-                    SELECT c.bib_id, bc.name, bc.category, COUNT(*) as borrow_count
-                    FROM circulations c
-                    LEFT JOIN book_categories bc ON c.bib_id = bc.bib_id
-                    WHERE c.action = 'CKO'
-                    GROUP BY c.bib_id, bc.name, bc.category
-                    ORDER BY borrow_count DESC
-                    LIMIT 20
-                """)
-                rows = cur.fetchall()
+            three_years_ago = int((datetime.now().replace(year=datetime.now().year - 3)).strftime('%Y%m%d'))
+            cur.execute("""
+                SELECT bc.bib_id, bc.name, bc.category, COUNT(*) as borrow_count
+                FROM circulations c
+                JOIN book_categories bc ON c.bib_id = bc.bib_id
+                WHERE c.status = 'borrowed' AND c.borrow_date >= %s
+                GROUP BY bc.bib_id, bc.name, bc.category
+                ORDER BY borrow_count DESC
+                LIMIT 20
+            """, (three_years_ago,))
+            rows = cur.fetchall()
             return [
                 {
                     "rank": i + 1,
@@ -135,7 +129,7 @@ async def get_hot_books():
 
     try:
         result = await run_sync_db(_query)
-        cache.cache_set(cache_key, result, 300)
+        cache.cache_set(cache_key, result, 3600)
         return result
     except Exception as e:
         logger.error("获取热门图书失败: %s", e, exc_info=True)
@@ -179,35 +173,21 @@ async def search_books(
             cur.execute(count_sql, params)
             total = cur.fetchone()[0]
 
-            try:
-                data_sql = f"""
-                    SELECT bc.bib_id, bc.name, bc.category,
-                           COALESCE(bs.borrow_count, 0) as borrow_count
-                    FROM book_categories bc
-                    LEFT JOIN mv_book_stats bs ON bc.bib_id = bs.bib_id
-                    {where_clause}
-                    ORDER BY borrow_count DESC, bc.bib_id ASC
-                    LIMIT %s OFFSET %s
-                """
-                cur.execute(data_sql, params + [page_size, offset])
-                rows = cur.fetchall()
-            except Exception:
-                conn.rollback()
-                data_sql = f"""
-                    SELECT bc.bib_id, bc.name, bc.category,
-                           COALESCE(ck.borrow_count, 0) as borrow_count
-                    FROM book_categories bc
-                    LEFT JOIN (
-                        SELECT bib_id, COUNT(*) as borrow_count
-                        FROM circulations WHERE action = 'CKO'
-                        GROUP BY bib_id
-                    ) ck ON bc.bib_id = ck.bib_id
-                    {where_clause}
-                    ORDER BY borrow_count DESC, bc.bib_id ASC
-                    LIMIT %s OFFSET %s
-                """
-                cur.execute(data_sql, params + [page_size, offset])
-                rows = cur.fetchall()
+            data_sql = f"""
+                SELECT bc.bib_id, bc.name, bc.category,
+                       COALESCE(ck.borrow_count, 0) as borrow_count
+                FROM book_categories bc
+                LEFT JOIN (
+                    SELECT bib_id, COUNT(*) as borrow_count
+                    FROM circulations WHERE status = 'borrowed'
+                    GROUP BY bib_id
+                ) ck ON bc.bib_id = ck.bib_id
+                {where_clause}
+                ORDER BY borrow_count DESC, bc.bib_id ASC
+                LIMIT %s OFFSET %s
+            """
+            cur.execute(data_sql, params + [page_size, offset])
+            rows = cur.fetchall()
 
             books = [
                 {
@@ -255,7 +235,7 @@ async def get_categories_list():
 
     try:
         result = await run_sync_db(_query)
-        cache.cache_set(cache_key, result, 300)
+        cache.cache_set(cache_key, result, 3600)
         return result
     except Exception as e:
         logger.error("获取分类列表失败: %s", e, exc_info=True)

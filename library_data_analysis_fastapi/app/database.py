@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from psycopg2 import pool
+import psycopg
+import psycopg_pool
 from typing import Generator, Callable, Any
 import logging
 from app.config import DB_CONFIG
@@ -10,27 +11,37 @@ _logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=50)
 
 
+def get_connection_string():
+    return (
+        f"host={DB_CONFIG['host']} "
+        f"port={DB_CONFIG['port']} "
+        f"dbname={DB_CONFIG['dbname']} "
+        f"user={DB_CONFIG['user']} "
+        f"password={DB_CONFIG['password']}"
+    )
+
+
 def init_db_pool():
     global _pool
-    _pool = pool.ThreadedConnectionPool(
-        10, 50,
-        host=DB_CONFIG['host'],
-        port=DB_CONFIG['port'],
-        dbname=DB_CONFIG['dbname'],
-        user=DB_CONFIG['user'],
-        password=DB_CONFIG['password']
+    conn_string = get_connection_string()
+    _pool = psycopg_pool.ConnectionPool(
+        conninfo=conn_string,
+        min_size=10,
+        max_size=50,
+        timeout=10
     )
     ensure_indexes()
 
 
 def ensure_indexes():
     indexes = [
-        "CREATE INDEX IF NOT EXISTS idx_circ_action_date_action ON circulations(action_date, action)",
-        "CREATE INDEX IF NOT EXISTS idx_circ_borrower_action ON circulations(borrower_id, action)",
-        "CREATE INDEX IF NOT EXISTS idx_circ_borrower_bib_action ON circulations(borrower_id, bib_id, action)",
-        "CREATE INDEX IF NOT EXISTS idx_circ_bib_action ON circulations(bib_id, action)",
-        "CREATE INDEX IF NOT EXISTS idx_book_categories_category ON book_categories(category)",
-        "CREATE INDEX IF NOT EXISTS idx_book_categories_bib ON book_categories(bib_id)",
+        "CREATE INDEX IF NOT EXISTS idx_circ_borrow_date ON circulations(borrow_date)",
+        "CREATE INDEX IF NOT EXISTS idx_circ_borrow_date_status ON circulations(borrow_date, status)",
+        "CREATE INDEX IF NOT EXISTS idx_circ_borrower_id ON circulations(borrower_id)",
+        "CREATE INDEX IF NOT EXISTS idx_circ_bib_id ON circulations(bib_id)",
+        "CREATE INDEX IF NOT EXISTS idx_circ_status ON circulations(status)",
+        "CREATE INDEX IF NOT EXISTS idx_borrowers_degree ON borrowers(degree)",
+        "CREATE INDEX IF NOT EXISTS idx_book_cat_bib_id ON book_categories(bib_id)",
     ]
     conn = None
     try:
@@ -40,10 +51,10 @@ def ensure_indexes():
                 try:
                     cur.execute(sql)
                 except Exception as e:
-                    _logger.warning("创建索引失败: %s, 错误: %s", sql, e)
+                    _logger.warning("Create index failed: %s, Error: %s", sql, e)
         conn.commit()
     except Exception as e:
-        _logger.warning("ensure_indexes 执行失败: %s", e)
+        _logger.warning("ensure_indexes failed: %s", e)
         if conn:
             try:
                 conn.rollback()
@@ -59,7 +70,7 @@ def get_db_connection():
     if _pool is None:
         init_db_pool()
     if _pool is None:
-        raise Exception("数据库连接池初始化失败")
+        raise Exception("Database connection pool initialization failed")
     return _pool.getconn()
 
 
@@ -77,7 +88,6 @@ def get_db() -> Generator:
 
 
 async def run_sync(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """Run a synchronous function in the thread pool executor."""
     loop = asyncio.get_running_loop()
     if kwargs:
         from functools import partial
@@ -95,10 +105,10 @@ async def run_sync_db(query_func: Callable[..., Any]) -> Any:
             try:
                 conn.rollback()
             except Exception as rollback_err:
-                _logger.warning("回滚失败: %s", rollback_err)
+                _logger.warning("Rollback failed: %s", rollback_err)
             raise
         finally:
             release_db_connection(conn)
-    
+
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _with_connection)

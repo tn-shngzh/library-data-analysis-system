@@ -24,7 +24,7 @@ async def get_correlation(year: Optional[int] = None, current_user=Depends(get_c
             with conn.cursor() as cur:
                 today = datetime.now().date()
                 if year is None:
-                    cur.execute("SELECT MAX(action_date) FROM circulations")
+                    cur.execute("SELECT MAX(borrow_date) FROM circulations WHERE status = 'borrowed'")
                     row = cur.fetchone()
                     year = (row[0] // 10000) if row and row[0] else today.year
 
@@ -38,14 +38,12 @@ async def get_correlation(year: Optional[int] = None, current_user=Depends(get_c
                 cur.execute("""
                     SELECT b.degree,
                            COUNT(*) as total,
-                           COUNT(CASE WHEN c.action = 'CKO' THEN 1 END) as cko,
-                           COUNT(CASE WHEN c.action = 'CKI' THEN 1 END) as cki,
-                           COUNT(CASE WHEN c.action = 'REH' THEN 1 END) as reh,
-                           COUNT(CASE WHEN c.action = 'REI' THEN 1 END) as rei,
+                           COUNT(CASE WHEN c.status = 'borrowed' THEN 1 END) as borrowed,
+                           COUNT(CASE WHEN c.status = 'returned' THEN 1 END) as returned,
                            COUNT(DISTINCT c.borrower_id) as reader_count
                     FROM circulations c
-                    JOIN borrowers b ON c.borrower_id = b.borrower_id
-                    WHERE c.action_date BETWEEN %s AND %s
+                    JOIN borrowers b ON c.borrower_id = b.id
+                    WHERE c.borrow_date BETWEEN %s AND %s
                     GROUP BY b.degree
                     ORDER BY total DESC
                 """, (start, end))
@@ -60,18 +58,18 @@ async def get_correlation(year: Optional[int] = None, current_user=Depends(get_c
                     reader_type_borrow.append(d)
 
                 cur.execute("""
-                    SELECT action, COUNT(*) as count
+                    SELECT status, COUNT(*) as count
                     FROM circulations
-                    WHERE action_date BETWEEN %s AND %s
-                    GROUP BY action
+                    WHERE borrow_date BETWEEN %s AND %s
+                    GROUP BY status
                     ORDER BY count DESC
                 """, (start, end))
-                action_rows = cur.fetchall()
-                total_actions = sum(r[1] for r in action_rows) or 1
-                action_names = {'CKO': '借出', 'CKI': '归还', 'REH': '馆内续借', 'REI': '线上续借'}
+                status_rows = cur.fetchall()
+                total_status = sum(r[1] for r in status_rows) or 1
+                status_names = {'borrowed': '借出', 'returned': '归还'}
                 action_distribution = [
-                    {"action": r[0], "name": action_names.get(r[0], r[0]), "count": r[1], "percent": round(r[1] / total_actions * 100, 1)}
-                    for r in action_rows
+                    {"action": r[0], "name": status_names.get(r[0], r[0]), "count": r[1], "percent": round(r[1] / total_status * 100, 1)}
+                    for r in status_rows
                 ]
 
                 return {"reader_type_borrow": reader_type_borrow, "action_distribution": action_distribution}
@@ -115,13 +113,11 @@ async def get_period_comparison(
                 def get_period_stats(s, e):
                     cur.execute("""
                         SELECT COUNT(*) as total,
-                               COUNT(CASE WHEN action = 'CKO' THEN 1 END) as cko,
-                               COUNT(CASE WHEN action = 'CKI' THEN 1 END) as cki,
-                               COUNT(CASE WHEN action = 'REH' THEN 1 END) as reh,
-                               COUNT(CASE WHEN action = 'REI' THEN 1 END) as rei,
+                               COUNT(CASE WHEN status = 'borrowed' THEN 1 END) as borrowed,
+                               COUNT(CASE WHEN status = 'returned' THEN 1 END) as returned,
                                COUNT(DISTINCT borrower_id) as active_readers
                         FROM circulations
-                        WHERE action_date BETWEEN %s AND %s
+                        WHERE borrow_date BETWEEN %s AND %s
                     """, (s, e))
                     cols = [desc[0] for desc in cur.description]
                     return dict(zip(cols, cur.fetchone()))
@@ -136,7 +132,7 @@ async def get_period_comparison(
                         return None
                     return round((v1 - v2) / v2 * 100, 1)
 
-                changes = {k: calc_change(k) for k in ['total', 'cko', 'cki', 'reh', 'rei', 'active_readers']}
+                changes = {k: calc_change(k) for k in ['total', 'borrowed', 'returned', 'active_readers']}
                 return {"period1": p1, "period2": p2, "changes": changes}
 
         result = await run_sync_db(_query)
@@ -160,7 +156,7 @@ async def get_category_heatmap(year: Optional[int] = None, months: int = 12, cur
             with conn.cursor() as cur:
                 today = datetime.now().date()
                 if year is None:
-                    cur.execute("SELECT MAX(action_date) FROM circulations")
+                    cur.execute("SELECT MAX(borrow_date) FROM circulations WHERE status = 'borrowed'")
                     row = cur.fetchone()
                     year = (row[0] // 10000) if row and row[0] else today.year
 
@@ -169,11 +165,11 @@ async def get_category_heatmap(year: Optional[int] = None, months: int = 12, cur
 
                 cur.execute("""
                     SELECT bc.category,
-                           EXTRACT(MONTH FROM TO_DATE(c.action_date::TEXT, 'YYYYMMDD')) as month,
+                           MOD(c.borrow_date, 10000) / 100 as month,
                            COUNT(*) as count
                     FROM circulations c
                     JOIN book_categories bc ON c.bib_id = bc.bib_id
-                    WHERE c.action_date BETWEEN %s AND %s
+                    WHERE c.borrow_date BETWEEN %s AND %s
                     GROUP BY bc.category, month
                     ORDER BY bc.category, month
                 """, (start_date, end_date))
@@ -202,8 +198,217 @@ async def get_category_heatmap(year: Optional[int] = None, months: int = 12, cur
                 return {"categories": categories, "months": month_names, "values": values}
 
         result = await run_sync_db(_query)
-        cache.cache_set(cache_key, result, 300)
+        cache.cache_set(cache_key, result, 3600)
         return result
     except Exception as e:
         logger.error("获取分类热力图失败: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取分类热力图失败: {e}")
+
+
+@router.get("/degree-monthly-trend")
+async def get_degree_monthly_trend(year: Optional[int] = None, current_user=Depends(get_current_user)):
+    cache_key = f"analysis:degree_trend:{year}"
+    cached = cache.cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        def _query(conn):
+            nonlocal year
+            with conn.cursor() as cur:
+                today = datetime.now().date()
+                if year is None:
+                    cur.execute("SELECT MAX(borrow_date) FROM circulations WHERE status = 'borrowed'")
+                    row = cur.fetchone()
+                    year = (row[0] // 10000) if row and row[0] else today.year
+
+                if year != today.year:
+                    start = int(f"{year}0101")
+                    end = int(f"{year}1231")
+                else:
+                    start = int(f"{today.year}0101")
+                    end = int(today.strftime('%Y%m%d'))
+
+                cur.execute("""
+                    SELECT b.degree,
+                           MOD(c.borrow_date, 10000) / 100 as month,
+                           COUNT(*) as count
+                    FROM circulations c
+                    JOIN borrowers b ON c.borrower_id = b.id
+                    WHERE c.borrow_date BETWEEN %s AND %s
+                    GROUP BY b.degree, month
+                    ORDER BY b.degree, month
+                """, (start, end))
+                rows = cur.fetchall()
+
+                degrees_order = list(education_levels.keys())
+                month_set = set()
+                data_map = {}
+                for row in rows:
+                    deg, month, count = row
+                    month_set.add(int(month))
+                    data_map[(deg, int(month))] = count
+
+                months_list = sorted(month_set)
+                month_names = [f"{m}月" for m in months_list]
+
+                series = []
+                for deg in degrees_order:
+                    if deg not in set(r[0] for r in rows):
+                        continue
+                    deg_data = []
+                    for m in months_list:
+                        deg_data.append(data_map.get((deg, m), 0))
+                    deg_name = education_levels.get(deg, deg)
+                    series.append({
+                        "name": deg_name,
+                        "data": deg_data
+                    })
+
+                return {"months": month_names, "series": series}
+
+        result = await run_sync_db(_query)
+        cache.cache_set(cache_key, result, 3600)
+        return result
+    except Exception as e:
+        logger.error("获取学历月度趋势失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取学历月度趋势失败: {e}")
+
+
+@router.get("/daily-trend")
+async def get_daily_trend(
+    start_date: Optional[int] = None,
+    end_date: Optional[int] = None,
+    current_user=Depends(get_current_user)
+):
+    today = datetime.now().date()
+    if start_date is None:
+        start_date = int(today.replace(day=1).strftime('%Y%m%d'))
+    if end_date is None:
+        end_date = int(today.strftime('%Y%m%d'))
+
+    cache_key = f"analysis:daily:{start_date}:{end_date}"
+    cached = cache.cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        def _query(conn):
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT borrow_date,
+                           COUNT(*) as total,
+                           COUNT(CASE WHEN status = 'borrowed' THEN 1 END) as borrowed,
+                           COUNT(CASE WHEN status = 'returned' THEN 1 END) as returned
+                    FROM circulations
+                    WHERE borrow_date BETWEEN %s AND %s
+                    GROUP BY borrow_date
+                    ORDER BY borrow_date
+                """, (start_date, end_date))
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+
+                dates = []
+                total_series = []
+                borrowed_series = []
+                returned_series = []
+
+                for row in rows:
+                    d = dict(zip(columns, row))
+                    date_str = str(d['borrow_date'])
+                    dates.append(f"{date_str[4:6]}/{date_str[6:8]}")
+                    total_series.append(d['total'])
+                    borrowed_series.append(d['borrowed'])
+                    returned_series.append(d['returned'])
+
+                return {
+                    "dates": dates,
+                    "total": total_series,
+                    "borrowed": borrowed_series,
+                    "returned": returned_series
+                }
+
+        result = await run_sync_db(_query)
+        cache.cache_set(cache_key, result, 600)
+        return result
+    except Exception as e:
+        logger.error("获取每日趋势失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取每日趋势失败: {e}")
+
+
+@router.get("/category-period-comparison")
+async def get_category_period_comparison(
+    period1_start: Optional[int] = None,
+    period1_end: Optional[int] = None,
+    period2_start: Optional[int] = None,
+    period2_end: Optional[int] = None,
+    current_user=Depends(get_current_user)
+):
+    today = datetime.now().date()
+    if period1_start is None:
+        period1_start = int(today.replace(day=1).strftime('%Y%m%d'))
+    if period1_end is None:
+        period1_end = int(today.strftime('%Y%m%d'))
+    if period2_start is None:
+        last_month = today.replace(day=1) - timedelta(days=1)
+        period2_start = int(last_month.replace(day=1).strftime('%Y%m%d'))
+    if period2_end is None:
+        last_month = today.replace(day=1) - timedelta(days=1)
+        period2_end = int(last_month.strftime('%Y%m%d'))
+
+    cache_key = f"analysis:cat_period:{period1_start}:{period1_end}:{period2_start}:{period2_end}"
+    cached = cache.cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        def _query(conn):
+            with conn.cursor() as cur:
+                def get_cat_stats(s, e):
+                    cur.execute("""
+                        SELECT bc.category, COUNT(*) as count
+                        FROM circulations c
+                        JOIN book_categories bc ON c.bib_id = bc.bib_id
+                        WHERE c.borrow_date BETWEEN %s AND %s
+                        GROUP BY bc.category
+                        ORDER BY count DESC
+                    """, (s, e))
+                    return {row[0]: row[1] for row in cur.fetchall()}
+
+                p1 = get_cat_stats(period1_start, period1_end)
+                p2 = get_cat_stats(period2_start, period2_end)
+
+                all_cats = set(list(p1.keys()) + list(p2.keys()))
+                comparison = []
+                for cat in all_cats:
+                    v1 = p1.get(cat, 0)
+                    v2 = p2.get(cat, 0)
+                    if v2 > 0:
+                        change = round((v1 - v2) / v2 * 100, 1)
+                    elif v1 > 0:
+                        change = 100.0
+                    else:
+                        change = 0.0
+                    comparison.append({
+                        "category": cat,
+                        "period1_count": v1,
+                        "period2_count": v2,
+                        "change": change
+                    })
+
+                comparison.sort(key=lambda x: x['change'], reverse=True)
+
+                return {
+                    "period1_start": period1_start,
+                    "period1_end": period1_end,
+                    "period2_start": period2_start,
+                    "period2_end": period2_end,
+                    "comparison": comparison
+                }
+
+        result = await run_sync_db(_query)
+        cache.cache_set(cache_key, result, 600)
+        return result
+    except Exception as e:
+        logger.error("获取分类时段对比失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取分类时段对比失败: {e}")

@@ -1,7 +1,8 @@
 import os
+import locale
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(encoding=locale.getpreferredencoding())
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

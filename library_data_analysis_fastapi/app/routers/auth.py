@@ -82,7 +82,7 @@ async def login(
         if not verify_password(password, password_hash):
             raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-        system = "library" if role != "admin" else "analysis"
+        system = "analysis"
 
         access_token = create_access_token(
             data={"sub": db_username, "role": role}
